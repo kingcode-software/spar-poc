@@ -23,16 +23,16 @@
   <h1>🔐 SPAR POC – Passkey Test</h1>
   <p>Use the buttons below to test passkey registration and login via SAP CDC screen sets.</p>
 
-  <button class="btn" onclick="showPasswordlessLogin()">Passwordless Login / Register</button>
+  <button class="btn" onclick="showStandardRegister()">Register Screen Set</button>
   <button class="btn" onclick="showStandardLogin()">Standard Login Screen Set</button>
 
   <div id="screen-container"></div>
 
   <script>
-    function showPasswordlessLogin() {
+    function showStandardRegister() {
       gigya.accounts.showScreenSet({
-        screenSet: 'Default-PasswordlessLogin',
-        startScreen: 'gigya-passwordless-login-screen',
+        screenSet: 'Default-RegistrationLogin',
+        startScreen: 'gigya-register-screen',
         containerID: 'screen-container'
       });
     }
