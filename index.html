@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPAR POC – Passkey Test</title>
+  <script>
+    // Load Gigya Web SDK with your CDC API key
+    var gigya_script = document.createElement('script');
+    gigya_script.src = 'https://cdns.gigya.com/js/gigya.js?apikey=4_q7bWSrrfARGv_vP1knVRIg';
+    document.head.appendChild(gigya_script);
+  </script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; text-align: center; }
+    h1 { color: #003366; }
+    .btn { margin: 10px; padding: 12px 24px; font-size: 16px; cursor: pointer; 
+           background: #003366; color: white; border: none; border-radius: 6px; }
+    .btn:hover { background: #0055aa; }
+    #screen-container { margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <h1>🔐 SPAR POC – Passkey Test</h1>
+  <p>Use the buttons below to test passkey registration and login via SAP CDC screen sets.</p>
+
+  <button class="btn" onclick="showPasswordlessLogin()">Passwordless Login / Register</button>
+  <button class="btn" onclick="showStandardLogin()">Standard Login Screen Set</button>
+
+  <div id="screen-container"></div>
+
+  <script>
+    function showPasswordlessLogin() {
+      gigya.accounts.showScreenSet({
+        screenSet: 'Default-PasswordlessLogin',
+        startScreen: 'gigya-passwordless-login-screen',
+        containerID: 'screen-container'
+      });
+    }
+
+    function showStandardLogin() {
+      gigya.accounts.showScreenSet({
+        screenSet: 'Default-RegistrationLogin',
+        startScreen: 'gigya-login-screen',
+        containerID: 'screen-container'
+      });
+    }
+  </script>
+</body>
+</html>
