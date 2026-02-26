@@ -3,56 +3,273 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SPAR POC – Passkey Test</title>
-  <script>
-    // Load Gigya Web SDK with your CDC API key
-    var gigya_script = document.createElement('script');
-    gigya_script.src = 'https://cdns.eu1.gigya.com/js/gigya.js?apikey=4_q7bWSrrfARGv_vP1knVRIg';
-    document.head.appendChild(gigya_script);
+  <title>SPAR POC – Passkey & OIDC Test</title>
+
+  <!--
+    ============================================================
+    STEP 1: Load Gigya Web SDK (eu1 data center)
+    Must load BEFORE gigya.oidc.js
+    ============================================================
+  -->
+  <script type="text/javascript"
+    src="https://cdns.eu1.gigya.com/JS/gigya.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
   </script>
-  // OIDC Handler - reads the context and completes the flow
-<script type="text/javascript" 
-  src="https://cdns.gigya.com/JS/gigya.oidc.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
-{
-  "loginURL": "https://kingcode-software.github.io/spar-poc/",
-  "consentURL": "https://kingcode-software.github.io/spar-poc/",
-  "errorURL": "https://kingcode-software.github.io/spar-poc/"
-}
-</script>
+
+  <!--
+    ============================================================
+    STEP 2: Load OIDC handler
+    Reads ?context= from URL and completes the OIDC flow.
+    Must load AFTER gigya.js.
+    The JSON config inside the script tag sets where CDC
+    should redirect for login, consent, and errors.
+    ============================================================
+  -->
+  <script type="text/javascript"
+    src="https://cdns.eu1.gigya.com/JS/gigya.oidc.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
+  {
+    "loginURL": "https://kingcode-software.github.io/spar-poc/",
+    "consentURL": "https://kingcode-software.github.io/spar-poc/",
+    "errorURL": "https://kingcode-software.github.io/spar-poc/"
+  }
+  </script>
+
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; text-align: center; }
-    h1 { color: #003366; }
-    .btn { margin: 10px; padding: 12px 24px; font-size: 16px; cursor: pointer; 
-           background: #003366; color: white; border: none; border-radius: 6px; }
-    .btn:hover { background: #0055aa; }
-    #screen-container { margin-top: 30px; }
+    :root {
+      --brand-dark:   #003366;
+      --brand-mid:    #0055aa;
+      --brand-light:  #e8f0fb;
+      --accent:       #e8001c;
+      --text:         #1a1a2e;
+      --muted:        #6b7280;
+      --radius:       10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--brand-light);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      color: var(--brand-dark);
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 28px;
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--brand-dark);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--brand-light);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px 18px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--brand-dark);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn:hover  { background: var(--brand-mid); }
+    .btn:active { transform: scale(0.98); }
+
+    .btn.secondary {
+      background: white;
+      color: var(--brand-dark);
+      border: 2px solid var(--brand-dark);
+    }
+    .btn.secondary:hover { background: var(--brand-light); }
+
+    .btn.danger {
+      background: var(--accent);
+    }
+    .btn.danger:hover { background: #c0001a; }
+
+    #status-bar {
+      width: 100%;
+      max-width: 560px;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 20px;
+      display: none;
+    }
+    #status-bar.info    { background: #dbeafe; color: #1e40af; display: block; }
+    #status-bar.success { background: #dcfce7; color: #166534; display: block; }
+    #status-bar.error   { background: #fee2e2; color: #991b1b; display: block; }
+
+    #screen-container {
+      width: 100%;
+      max-width: 560px;
+      margin-top: 10px;
+    }
+
+    footer {
+      margin-top: 40px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
-  <h1>🔐 SPAR POC – Passkey Test</h1>
-  <p>Use the buttons below to test passkey registration and login via SAP CDC screen sets.</p>
 
-  <button class="btn" onclick="showPasskeyRegister()">Register Screen Set</button>
-  <button class="btn" onclick="showStandardLogin()">Standard Login Screen Set</button>
+  <header>
+    <h1>🔐 SPAR POC</h1>
+    <p>Passkey &amp; OIDC Scoped Claims Test</p>
+  </header>
 
+  <!-- Status feedback bar -->
+  <div id="status-bar"></div>
+
+  <!-- Passkey / Auth Section -->
+  <div class="card">
+    <h2>🔑 Passkey &amp; Login</h2>
+    <div class="btn-group">
+      <button class="btn" onclick="showPasskeyRegister()">Register Passkey</button>
+      <button class="btn secondary" onclick="showStandardLogin()">Standard Login</button>
+      <button class="btn danger" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- OIDC / Token Section -->
+  <div class="card">
+    <h2>🪙 OIDC Token Info</h2>
+    <div class="btn-group">
+      <button class="btn secondary" onclick="checkSession()">Check Session</button>
+      <button class="btn secondary" onclick="getAccountInfo()">Get Account Info</button>
+    </div>
+  </div>
+
+  <!-- Screen set render target -->
   <div id="screen-container"></div>
 
+  <footer>
+    SAP CDC POC &nbsp;|&nbsp; EU1 Data Center &nbsp;|&nbsp; API Key: 4_q7bWSrrfARGv_vP1knVRIg
+  </footer>
+
   <script>
+    // ── Utility ──────────────────────────────────────────────
+    function setStatus(msg, type) {
+      var bar = document.getElementById('status-bar');
+      bar.textContent = msg;
+      bar.className = type; // 'info' | 'success' | 'error'
+    }
+
+    // ── Passkey / Screen Sets ─────────────────────────────────
     function showPasskeyRegister() {
+      setStatus('Loading passkey registration screen…', 'info');
       gigya.accounts.showScreenSet({
         screenSet: 'Default-RegistrationLogin',
         startScreen: 'gigya-passkey-registration-screen',
-        containerID: 'screen-container'
+        containerID: 'screen-container',
+        onAfterSubmit: function(e) {
+          if (e.response && e.response.errorCode === 0) {
+            setStatus('✅ Passkey registered successfully!', 'success');
+          }
+        },
+        onError: function(e) {
+          setStatus('❌ Error: ' + (e.errorMessage || 'Unknown error'), 'error');
+        }
       });
     }
 
     function showStandardLogin() {
+      setStatus('Loading login screen…', 'info');
       gigya.accounts.showScreenSet({
         screenSet: 'Default-RegistrationLogin',
         startScreen: 'gigya-login-screen',
-        containerID: 'screen-container'
+        containerID: 'screen-container',
+        onLogin: function(e) {
+          setStatus('✅ Logged in as: ' + (e.profile && e.profile.email || e.UID), 'success');
+        },
+        onError: function(e) {
+          setStatus('❌ Login error: ' + (e.errorMessage || 'Unknown error'), 'error');
+        }
+      });
+    }
+
+    // ── Session / Account ─────────────────────────────────────
+    function checkSession() {
+      gigya.accounts.getAccountInfo({
+        callback: function(res) {
+          if (res.errorCode === 0) {
+            setStatus('✅ Active session — UID: ' + res.UID + ' | Email: ' + (res.profile && res.profile.email || 'n/a'), 'success');
+          } else {
+            setStatus('⚠️ No active session (code ' + res.errorCode + ')', 'error');
+          }
+        }
+      });
+    }
+
+    function getAccountInfo() {
+      gigya.accounts.getAccountInfo({
+        include: 'profile,data,preferences',
+        callback: function(res) {
+          if (res.errorCode === 0) {
+            setStatus('✅ Account loaded — check browser console for full payload', 'success');
+            console.log('[CDC] Account Info:', JSON.stringify(res, null, 2));
+          } else {
+            setStatus('❌ getAccountInfo failed: ' + res.errorMessage, 'error');
+          }
+        }
+      });
+    }
+
+    function doLogout() {
+      gigya.accounts.logout({
+        callback: function(res) {
+          setStatus('👋 Logged out successfully', 'info');
+          document.getElementById('screen-container').innerHTML = '';
+        }
       });
     }
   </script>
+
 </body>
 </html>
