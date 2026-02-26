@@ -10,6 +10,15 @@
     gigya_script.src = 'https://cdns.eu1.gigya.com/js/gigya.js?apikey=4_q7bWSrrfARGv_vP1knVRIg';
     document.head.appendChild(gigya_script);
   </script>
+  // OIDC Handler - reads the context and completes the flow
+<script type="text/javascript" 
+  src="https://cdns.gigya.com/JS/gigya.oidc.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
+{
+  "loginURL": "https://kingcode-software.github.io/spar-poc/",
+  "consentURL": "https://kingcode-software.github.io/spar-poc/",
+  "errorURL": "https://kingcode-software.github.io/spar-poc/"
+}
+</script>
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; text-align: center; }
     h1 { color: #003366; }
