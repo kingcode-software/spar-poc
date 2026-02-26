@@ -33,6 +33,24 @@
   }
   </script>
 
+  <script>
+  <!-- Explicitly handle OIDC context if present in URL -->
+  function handleOIDCContext() {
+    var params = new URLSearchParams(window.location.search);
+    var context = params.get('context');
+    
+    if (context) {
+      <!-- Tell gigya.oidc to process the context and complete the flow -->
+      gigya.oidc.handleOPRedirect();
+    }
+  }
+
+  <!-- Run after Gigya SDK is ready -->
+  window.onGigyaServiceReady = function() {
+    handleOIDCContext();
+  };
+</script>
+
   <style>
     :root {
       --brand-dark:   #003366;
