@@ -230,38 +230,70 @@ window.onGigyaServiceReady = function() {
 function authorizeViaRest(ctx, acct, context, scope, state) {
   setStatus('🔄 <b>Step 3/3</b> — Requesting authorization code…', 'info');
 
-  var endpoint = 'https://accounts.eu1.gigya.com/accounts.oidc.authorize';
+  // CDC OIDC proxy completion endpoint — fidm domain, OIDC path
+  // Sends session proof so CDC can issue the authorization code
+  // and return the redirect URL for the RP callback
+  var endpoint = 'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg/authorize';
   var body = new URLSearchParams({
-    apiKey:             '4_q7bWSrrfARGv_vP1knVRIg',
-    context:            context,
     response_type:      'code',
     client_id:          ctx.client_id,
     redirect_uri:       ctx.redirect_url,
     scope:              scope,
+    context:            context,
     UID:                acct.UID,
     UIDSignature:       acct.UIDSignature,
     signatureTimestamp: acct.signatureTimestamp,
     state:              state || ''
   });
 
-  console.log('[OIDC] POSTing to accounts.oidc.authorize');
+  console.log('[OIDC] POSTing to fidm /authorize');
   console.log('[OIDC] UID:', acct.UID);
+  console.log('[OIDC] redirect_uri:', ctx.redirect_url);
 
   fetch(endpoint, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body
+    body:    body,
+    redirect: 'manual'   // capture the 302 redirect instead of following it
   })
-  .then(function(r) { return r.json(); })
-  .then(function(res) {
-    console.log('[OIDC] authorize response:', JSON.stringify(res, null, 2));
+  .then(function(r) {
+    console.log('[OIDC] Response status:', r.status, r.type);
 
-    if (res.redirectURL) {
-      setStatus('✅ Code issued — redirecting to Postman callback…', 'success');
-      window.location.href = res.redirectURL;
-    } else {
-      setStatus('❌ authorize failed (code ' + res.errorCode + '): ' + (res.errorMessage || res.errorDetails || JSON.stringify(res)), 'error');
+    // CDC responds with a 302 redirect to redirect_uri?code=XXXX
+    // With redirect:'manual' the browser exposes it as an opaqueredirect
+    // We need to read the Location header to get the redirect URL
+    var location = r.headers.get('Location');
+    console.log('[OIDC] Location header:', location);
+
+    if (r.status === 302 || r.type === 'opaqueredirect') {
+      if (location) {
+        setStatus('✅ Code issued — redirecting to Postman callback…', 'success');
+        window.location.href = location;
+        return;
+      }
+      // opaqueredirect — browser hid the Location header (CORS)
+      // Fall through to text response check
     }
+
+    // Try reading as text first so we can log the raw response
+    return r.text().then(function(raw) {
+      console.log('[OIDC] Raw response body:', raw);
+
+      // Try JSON parse
+      try {
+        var res = JSON.parse(raw);
+        if (res.redirectURL) {
+          setStatus('✅ Code issued — redirecting…', 'success');
+          window.location.href = res.redirectURL;
+        } else {
+          setStatus('❌ authorize failed (code ' + res.errorCode + '): ' + (res.errorMessage || res.errorDetails || raw), 'error');
+        }
+      } catch(e) {
+        // Not JSON — log raw and report
+        setStatus('❌ Unexpected response format — check console', 'error');
+        console.error('[OIDC] Non-JSON response:', raw);
+      }
+    });
   })
   .catch(function(err) {
     setStatus('❌ Network error: ' + err.message, 'error');
