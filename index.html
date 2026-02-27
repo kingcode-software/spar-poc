@@ -227,13 +227,14 @@ window.onGigyaServiceReady = function() {
 
   if (params.get('context')) {
     setStatus('🔄 Completing OIDC authentication… please wait', 'info');
-    
-    // Dump what's inside gigya.oidc.op
-    console.log('[OIDC] gigya.oidc.op:', gigya.oidc.op);
-    console.log('[OIDC] gigya.oidc.op keys:', Object.keys(gigya.oidc.op || {}));
-    for (var key in gigya.oidc.op) {
-      console.log('  gigya.oidc.op.' + key, '=', typeof gigya.oidc.op[key]);
-    }
+
+    // Call getContextData to see what it returns
+    gigya.oidc.op.getContextData({
+      callback: function(response) {
+        console.log('[OIDC] getContextData response:', JSON.stringify(response, null, 2));
+        setStatus('✅ Context data received - check console', 'success');
+      }
+    });
     return;
   }
 };
