@@ -9,7 +9,7 @@
     SCRIPT LOAD ORDER (critical):
       1. gigya.js            — initialises gigya global
       2. __gigyaOIDCConfig   — must be set BEFORE gigya.oidc.js loads
-      3. gigya.oidc.js       — reads config on load, exposes gigya.oidc.op.*
+      3. gigya.oidc.js       — reads config on load
   -->
   <script src="https://cdns.eu1.gigya.com/JS/gigya.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg"></script>
 
@@ -115,28 +115,44 @@ function setStatus(msg, type) {
   el.className = type;
 }
 
+// ── Decode context JWT payload without SDK ────────────────────────────────
+//
+// gigya.oidc.op.getContextData() requires client_id to still be in the URL,
+// but we must strip the URL to prevent loop. Solution: decode the JWT
+// ourselves — it is a standard base64url JWT, no signature verification
+// needed here (CDC already signed and validated it server-side).
+// Payload contains: client_id, redirect_uri (redirect_url), ctx_id, iss, exp
+//
+function decodeContextJwt(token) {
+  try {
+    var payload = token.split('.')[1];
+    // base64url → base64 → decode
+    var base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    var json    = decodeURIComponent(
+      atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join('')
+    );
+    return JSON.parse(json);
+  } catch(e) {
+    console.error('[OIDC] Failed to decode context JWT:', e);
+    return null;
+  }
+}
+
 // ── OIDC Proxy Flow ───────────────────────────────────────────────────────
 //
-// Called by gigya.js once SDK is ready.
-//
-// Flow when ?context= is present in URL:
-//   1. getContextData()   — decode context JWT → get client_id, redirect_uri
-//   2. getAccountInfo()   — get active session proof (UID + signature)
-//   3. Call accounts.oidc.authorize REST API → returns redirect URL with code
-//   4. Navigate browser to that URL → Postman callback receives ?code=XXXX
-//
-// Using the REST API (step 3) instead of re-redirecting to /authorize
-// prevents the loop caused by CDC bouncing back to the proxy page again.
+// Flow when ?context= is present:
+//   1. Decode context JWT manually (client_id, redirect_uri)
+//   2. Strip URL immediately to prevent loop on any reload
+//   3. Get active session (UID + UIDSignature + signatureTimestamp)
+//   4. POST to accounts.oidc.authorize REST API
+//      → returns { redirectURL: "...?code=XXXX" }
+//   5. Navigate to redirectURL — Postman callback receives the code
 //
 window.onGigyaServiceReady = function() {
   var params  = new URLSearchParams(window.location.search);
   var context = params.get('context');
-
-  // Guard: strip context from URL after reading to prevent loop on reload
-  if (context && window.history && window.history.replaceState) {
-    var cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-  }
 
   if (!context) {
     console.log('[CDC] Ready — normal page load');
@@ -144,108 +160,83 @@ window.onGigyaServiceReady = function() {
   }
 
   console.log('[OIDC] Context detected — starting proxy flow');
-  setStatus('🔄 <b>Step 1/3</b> — Decoding OIDC context…', 'info');
+  setStatus('🔄 <b>Step 1/3</b> — Decoding context…', 'info');
 
-  // Step 1: Decode the signed context JWT
-  gigya.oidc.op.getContextData({
-    callback: function(ctx) {
-      console.log('[OIDC] Context decoded:', JSON.stringify(ctx, null, 2));
+  // Step 1: Decode context JWT directly (no SDK call needed)
+  var ctx = decodeContextJwt(context);
+  if (!ctx || !ctx.client_id || !ctx.redirect_url) {
+    setStatus('❌ Could not decode context JWT', 'error');
+    console.error('[OIDC] Decoded payload:', ctx);
+    return;
+  }
 
-      if (ctx.errorCode !== 0) {
-        setStatus('❌ Context decode failed: ' + ctx.errorMessage, 'error');
+  console.log('[OIDC] Context payload:', JSON.stringify(ctx, null, 2));
+  console.log('[OIDC] client_id   :', ctx.client_id);
+  console.log('[OIDC] redirect_url:', ctx.redirect_url);
+
+  // Step 2: Strip URL immediately — prevents loop if page reloads at any point
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  var scope = params.get('scope') || 'openid';
+  var state = params.get('state') || '';
+
+  setStatus('🔄 <b>Step 2/3</b> — Checking active session…', 'info');
+
+  // Step 3: Get session proof
+  gigya.accounts.getAccountInfo({
+    callback: function(acct) {
+      console.log('[OIDC] getAccountInfo errorCode:', acct.errorCode);
+
+      if (acct.errorCode !== 0) {
+        setStatus('⚠️ No active session — please log in', 'error');
+        // Save context to sessionStorage so we can complete after login
+        sessionStorage.setItem('oidc_context', context);
+        sessionStorage.setItem('oidc_scope',   scope);
+        sessionStorage.setItem('oidc_state',   state);
+        gigya.accounts.showScreenSet({
+          screenSet:   'Default-RegistrationLogin',
+          startScreen: 'gigya-login-screen',
+          containerID: 'screen-container',
+          onLogin: function(loginResult) {
+            // Retrieve saved context and complete the flow
+            var savedContext = sessionStorage.getItem('oidc_context');
+            var savedScope   = sessionStorage.getItem('oidc_scope') || 'openid';
+            var savedState   = sessionStorage.getItem('oidc_state') || '';
+            sessionStorage.removeItem('oidc_context');
+            sessionStorage.removeItem('oidc_scope');
+            sessionStorage.removeItem('oidc_state');
+            authorizeViaRest(ctx, loginResult, savedContext, savedScope, savedState);
+          }
+        });
         return;
       }
 
-      setStatus('🔄 <b>Step 2/3</b> — Checking session…', 'info');
-
-      // Step 2: Get active session proof
-      gigya.accounts.getAccountInfo({
-        callback: function(acct) {
-          console.log('[OIDC] Session check errorCode:', acct.errorCode);
-
-          if (acct.errorCode !== 0) {
-            // No session — show login, reload with clean URL will not re-trigger
-            // (context was already stripped from URL above)
-            setStatus('⚠️ No active session — please log in', 'error');
-            gigya.accounts.showScreenSet({
-              screenSet:   'Default-RegistrationLogin',
-              startScreen: 'gigya-login-screen',
-              containerID: 'screen-container',
-              onLogin: function() {
-                // After login, manually complete the flow with saved context
-                completeOidcFlow(ctx, context, params);
-              }
-            });
-            return;
-          }
-
-          completeOidcFlow(ctx, acct, context, params);
-        }
-      });
+      // Step 4: Exchange session for auth code
+      authorizeViaRest(ctx, acct, context, scope, state);
     }
   });
 };
 
-// Step 3: Exchange session for authorization code via CDC REST API
-// Uses accounts.oidc.authorize — returns the redirect URL with ?code=
-// instead of doing a browser redirect that loops back to this page.
-function completeOidcFlow(ctx, acct, context, params) {
-  setStatus('🔄 <b>Step 3/3</b> — Exchanging session for authorization code…', 'info');
-
-  var uid          = acct.UID;
-  var uidSig       = acct.UIDSignature;
-  var sigTimestamp = acct.signatureTimestamp;
-  var scope        = params.get('scope') || 'openid';
-  var state        = params.get('state') || '';
-
-  console.log('[OIDC] Calling accounts.oidc.authorize for UID:', uid);
-
-  // accounts.oidc.authorize — CDC server-side authorization
-  // Returns: { redirectURL: "https://oauth.pstmn.io/v1/callback?code=XXXX" }
-  // This avoids the browser redirect loop because CDC responds with the
-  // redirect URL in the callback rather than issuing a 302.
-  gigya.accounts.oidc.authorize({
-    context:            context,
-    response_type:      'code',
-    client_id:          ctx.client_id,
-    redirect_uri:       ctx.redirect_uri,
-    scope:              scope,
-    UID:                uid,
-    UIDSignature:       uidSig,
-    signatureTimestamp: sigTimestamp,
-    state:              state,
-    callback: function(res) {
-      console.log('[OIDC] oidc.authorize response:', JSON.stringify(res, null, 2));
-
-      if (res.errorCode !== 0) {
-        // Fallback: if oidc.authorize not available, try direct REST call
-        console.warn('[OIDC] oidc.authorize failed, trying REST fallback');
-        authorizeViaRest(ctx, acct, context, scope, state);
-        return;
-      }
-
-      if (res.redirectURL) {
-        setStatus('✅ Authorization code issued — redirecting to Postman…', 'success');
-        console.log('[OIDC] Redirecting to:', res.redirectURL);
-        window.location.href = res.redirectURL;
-      } else {
-        setStatus('❌ No redirect URL in response', 'error');
-        console.error('[OIDC] Unexpected response structure:', res);
-      }
-    }
-  });
-}
-
-// REST fallback: POST to accounts.oidc.authorize REST endpoint directly
-// Used if the JS SDK method is unavailable
+// ── Step 4: POST to CDC accounts.oidc.authorize REST endpoint ─────────────
+//
+// This is the key fix — instead of doing a browser redirect to /authorize
+// (which loops back through the proxy page), we POST directly to the
+// accounts REST API which returns the redirect URL in the JSON response.
+// We then navigate to it in one clean final step.
+//
+// Note: redirect_url (not redirect_uri) is the field name in the CDC
+// context JWT payload.
+//
 function authorizeViaRest(ctx, acct, context, scope, state) {
-  var apiBase = 'https://accounts.eu1.gigya.com/accounts.oidc.authorize';
-  var body    = new URLSearchParams({
+  setStatus('🔄 <b>Step 3/3</b> — Requesting authorization code…', 'info');
+
+  var endpoint = 'https://accounts.eu1.gigya.com/accounts.oidc.authorize';
+  var body = new URLSearchParams({
     apiKey:             '4_q7bWSrrfARGv_vP1knVRIg',
     context:            context,
     response_type:      'code',
     client_id:          ctx.client_id,
-    redirect_uri:       ctx.redirect_uri,
+    redirect_uri:       ctx.redirect_url,
     scope:              scope,
     UID:                acct.UID,
     UIDSignature:       acct.UIDSignature,
@@ -253,29 +244,35 @@ function authorizeViaRest(ctx, acct, context, scope, state) {
     state:              state || ''
   });
 
-  fetch(apiBase, { method: 'POST', body: body,
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  console.log('[OIDC] POSTing to accounts.oidc.authorize');
+  console.log('[OIDC] UID:', acct.UID);
+
+  fetch(endpoint, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    body
   })
   .then(function(r) { return r.json(); })
   .then(function(res) {
-    console.log('[OIDC] REST authorize response:', res);
+    console.log('[OIDC] authorize response:', JSON.stringify(res, null, 2));
+
     if (res.redirectURL) {
-      setStatus('✅ Code issued (REST) — redirecting…', 'success');
+      setStatus('✅ Code issued — redirecting to Postman callback…', 'success');
       window.location.href = res.redirectURL;
     } else {
-      setStatus('❌ REST authorize failed: ' + (res.errorMessage || JSON.stringify(res)), 'error');
+      setStatus('❌ authorize failed (code ' + res.errorCode + '): ' + (res.errorMessage || res.errorDetails || JSON.stringify(res)), 'error');
     }
   })
   .catch(function(err) {
-    setStatus('❌ REST call error: ' + err.message, 'error');
-    console.error('[OIDC] REST error:', err);
+    setStatus('❌ Network error: ' + err.message, 'error');
+    console.error('[OIDC] fetch error:', err);
   });
 }
 
 // ── Authentication Screen Sets ────────────────────────────────────────────
 function showPasskeyRegister() {
   gigya.accounts.showScreenSet({
-    screenSet: 'Default-RegistrationLogin',
+    screenSet:   'Default-RegistrationLogin',
     startScreen: 'gigya-passkey-registration-screen',
     containerID: 'screen-container',
     onAfterSubmit: function(e) {
@@ -288,7 +285,7 @@ function showPasskeyRegister() {
 
 function showStandardLogin() {
   gigya.accounts.showScreenSet({
-    screenSet: 'Default-RegistrationLogin',
+    screenSet:   'Default-RegistrationLogin',
     startScreen: 'gigya-login-screen',
     containerID: 'screen-container',
     onLogin: function(e) {
@@ -298,7 +295,7 @@ function showStandardLogin() {
   });
 }
 
-// ── Session Info ──────────────────────────────────────────────────────────
+// ── Session ───────────────────────────────────────────────────────────────
 function checkSession() {
   gigya.accounts.getAccountInfo({
     callback: function(res) {
