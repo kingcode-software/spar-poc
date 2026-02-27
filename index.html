@@ -3,25 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SPAR POC – Passkey & OIDC Test</title>
+  <title>SPAR POC – Passkey &amp; OIDC Scoped Claims</title>
 
   <!--
-    ============================================================
-    STEP 1: Load Gigya Web SDK (eu1 data center)
-    Must load BEFORE gigya.oidc.js
-    ============================================================
+  SCRIPT LOAD ORDER — CRITICAL:
+    1. gigya.js           must load first (initialises global gigya object)
+    2. __gigyaOIDCConfig  set as window variable BEFORE gigya.oidc.js loads
+    3. gigya.oidc.js      reads window.__gigyaOIDCConfig on load
   -->
+
+  <!-- 1. Gigya Web SDK (EU1 data center) -->
   <script type="text/javascript"
     src="https://cdns.eu1.gigya.com/JS/gigya.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
   </script>
 
-  <!--
-    ============================================================
-    STEP 2: Set OIDC config in window BEFORE loading gigya.oidc.js
-    NOTE: JSON cannot go inside an external script tag body -
-    it must be set as a global variable beforehand.
-    ============================================================
-  -->
+  <!-- 2. OIDC config — must be window variable, set BEFORE gigya.oidc.js -->
   <script type="text/javascript">
     window.__gigyaOIDCConfig = {
       loginURL:   "https://kingcode-software.github.io/spar-poc/",
@@ -30,33 +26,22 @@
     };
   </script>
 
-  <!--
-    ============================================================
-    STEP 3: Load OIDC handler AFTER config is set
-    gigya.oidc.js automatically detects ?context= in the URL
-    and completes the authorization code flow by itself -
-    no manual function call needed.
-    It will redirect the browser to your redirect_uri with
-    ?code=XXXX appended, which Postman's callback intercepts.
-    ============================================================
-  -->
+  <!-- 3. OIDC helper — exposes gigya.oidc.op.getContextData() -->
   <script type="text/javascript"
     src="https://cdns.eu1.gigya.com/JS/gigya.oidc.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
   </script>
 
   <style>
     :root {
-      --brand-dark:   #003366;
-      --brand-mid:    #0055aa;
-      --brand-light:  #e8f0fb;
-      --accent:       #e8001c;
-      --text:         #1a1a2e;
-      --muted:        #6b7280;
-      --radius:       10px;
+      --brand-dark:  #003366;
+      --brand-mid:   #0055aa;
+      --brand-light: #e8f0fb;
+      --accent:      #e8001c;
+      --text:        #1a1a2e;
+      --muted:       #6b7280;
+      --radius:      10px;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
       background: var(--brand-light);
@@ -67,55 +52,39 @@
       align-items: center;
       padding: 40px 20px;
     }
-
-    header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
-
-    header h1 {
-      font-size: 2rem;
-      color: var(--brand-dark);
-      letter-spacing: -0.5px;
-    }
-
-    header p {
-      color: var(--muted);
-      margin-top: 8px;
-      font-size: 0.95rem;
-    }
-
+    header { text-align: center; margin-bottom: 32px; }
+    header h1 { font-size: 2rem; color: var(--brand-dark); letter-spacing: -0.5px; }
+    header p  { color: var(--muted); margin-top: 8px; font-size: 0.95rem; }
     .card {
       background: white;
       border-radius: var(--radius);
       box-shadow: 0 4px 20px rgba(0,0,0,0.08);
       padding: 28px;
       width: 100%;
-      max-width: 560px;
+      max-width: 580px;
       margin-bottom: 20px;
     }
-
     .card h2 {
-      font-size: 1rem;
+      font-size: 0.85rem;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.2px;
       color: var(--brand-dark);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       padding-bottom: 10px;
       border-bottom: 2px solid var(--brand-light);
     }
-
-    .btn-group {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
+    .card p.desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+      line-height: 1.6;
     }
-
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .btn {
       flex: 1;
-      min-width: 140px;
-      padding: 12px 18px;
-      font-size: 0.9rem;
+      min-width: 130px;
+      padding: 11px 16px;
+      font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
       background: var(--brand-dark);
@@ -124,190 +93,348 @@
       border-radius: var(--radius);
       transition: background 0.2s, transform 0.1s;
     }
-
     .btn:hover  { background: var(--brand-mid); }
     .btn:active { transform: scale(0.98); }
-
     .btn.secondary {
       background: white;
       color: var(--brand-dark);
       border: 2px solid var(--brand-dark);
     }
     .btn.secondary:hover { background: var(--brand-light); }
-
-    .btn.danger {
-      background: var(--accent);
-    }
+    .btn.danger { background: var(--accent); }
     .btn.danger:hover { background: #c0001a; }
-
     #status-bar {
       width: 100%;
-      max-width: 560px;
-      padding: 10px 16px;
+      max-width: 580px;
+      padding: 12px 16px;
       border-radius: var(--radius);
       font-size: 0.85rem;
       font-weight: 500;
       margin-bottom: 20px;
       display: none;
+      line-height: 1.6;
     }
-    #status-bar.info    { background: #dbeafe; color: #1e40af; display: block; }
-    #status-bar.success { background: #dcfce7; color: #166534; display: block; }
-    #status-bar.error   { background: #fee2e2; color: #991b1b; display: block; }
-
-    #screen-container {
-      width: 100%;
-      max-width: 560px;
-      margin-top: 10px;
-    }
-
-    footer {
-      margin-top: 40px;
-      color: var(--muted);
-      font-size: 0.75rem;
-      text-align: center;
-    }
+    #status-bar.info    { background:#dbeafe; color:#1e40af; display:block; }
+    #status-bar.success { background:#dcfce7; color:#166534; display:block; }
+    #status-bar.error   { background:#fee2e2; color:#991b1b; display:block; }
+    #screen-container { width: 100%; max-width: 580px; margin-top: 10px; }
+    footer { margin-top: 40px; color: var(--muted); font-size: 0.75rem; text-align: center; }
+    code { font-family: monospace; font-size: 0.8rem; background: #f3f4f6; padding: 1px 4px; border-radius: 4px; }
   </style>
 </head>
 <body>
 
-  <header>
-    <h1>🔐 SPAR POC</h1>
-    <p>Passkey &amp; OIDC Scoped Claims Test</p>
-  </header>
+<header>
+  <h1>🔐 SPAR POC</h1>
+  <p>Passkey · OIDC Authorization Code Flow · Scoped Claims</p>
+</header>
 
-  <!-- Status feedback bar -->
-  <div id="status-bar"></div>
+<!-- Status feedback bar — updated at each step of the OIDC flow -->
+<div id="status-bar"></div>
 
-  <!-- Passkey / Auth Section -->
-  <div class="card">
-    <h2>🔑 Passkey &amp; Login</h2>
-    <div class="btn-group">
-      <button class="btn" onclick="showPasskeyRegister()">Register Passkey</button>
-      <button class="btn secondary" onclick="showStandardLogin()">Standard Login</button>
-      <button class="btn danger" onclick="doLogout()">Logout</button>
-    </div>
+<!-- ── Card 1: Passkey & Login ───────────────────────────────────────────── -->
+<div class="card">
+  <h2>🔑 Passkey &amp; Login</h2>
+  <p class="desc">
+    Register a FIDO2/WebAuthn passkey tied to the currently logged-in account,
+    or authenticate using standard email &amp; password. Logout clears the CDC
+    session cookie.
+  </p>
+  <div class="btn-group">
+    <button class="btn"           onclick="showPasskeyRegister()">Register Passkey</button>
+    <button class="btn secondary" onclick="showStandardLogin()">Standard Login</button>
+    <button class="btn danger"    onclick="doLogout()">Logout</button>
   </div>
+</div>
 
-  <!-- OIDC / Token Section -->
-  <div class="card">
-    <h2>🪙 OIDC Token Info</h2>
-    <div class="btn-group">
-      <button class="btn secondary" onclick="checkSession()">Check Session</button>
-      <button class="btn secondary" onclick="getAccountInfo()">Get Account Info</button>
-    </div>
+<!-- ── Card 2: Session & Account Info ──────────────────────────────────────── -->
+<div class="card">
+  <h2>👤 Session &amp; Account</h2>
+  <p class="desc">
+    Verify whether a CDC session is active and retrieve the full account payload
+    (profile, data, preferences). Full output is sent to the browser console —
+    open <strong>DevTools → Console</strong> to inspect the JSON.
+  </p>
+  <div class="btn-group">
+    <button class="btn secondary" onclick="checkSession()">Check Session</button>
+    <button class="btn secondary" onclick="getAccountInfo()">Get Account Info</button>
   </div>
+</div>
 
-  <!-- Screen set render target -->
-  <div id="screen-container"></div>
+<!-- ── Card 3: OIDC Flow Info ──────────────────────────────────────────────── -->
+<div class="card">
+  <h2>🪙 OIDC Proxy Flow</h2>
+  <p class="desc">
+    When Postman triggers the authorization code flow, CDC redirects to this page
+    with <code>?context=...</code> in the URL. The page automatically detects
+    this, decodes the context, retrieves the active session and redirects back
+    to CDC — which issues an authorization code to Postman's callback URL
+    (<code>https://oauth.pstmn.io/v1/callback</code>).
+    Watch the <strong>status bar</strong> above to see each step.
+  </p>
+  <div class="btn-group">
+    <button class="btn secondary" onclick="checkOidcContext()">Inspect URL for Context</button>
+  </div>
+</div>
 
-  <footer>
-    SAP CDC POC &nbsp;|&nbsp; EU1 Data Center &nbsp;|&nbsp; API Key: 4_q7bWSrrfARGv_vP1knVRIg
-  </footer>
+<!-- Gigya screen sets render here -->
+<div id="screen-container"></div>
 
-  <script>
-    // ── Utility ──────────────────────────────────────────────
-    function setStatus(msg, type) {
-      var bar = document.getElementById('status-bar');
-      bar.textContent = msg;
-      bar.className = type; // 'info' | 'success' | 'error'
-    }
+<footer>
+  SPAR SAP CDC POC &nbsp;|&nbsp; EU1 Data Centre &nbsp;|&nbsp;
+  API Key: 4_q7bWSrrfARGv_vP1knVRIg &nbsp;|&nbsp;
+  Client ID: U_XwKfuhT-wL5cbVQYZ47En0
+</footer>
 
-    // ── OIDC Context Handler ──────────────────────────────────
-    // onGigyaServiceReady fires when gigya.js is fully loaded.
-    // If ?context= is present, gigya.oidc.js handles everything
-    // automatically - we just show a status message and return.
-    // gigya.oidc.js will:
-    //   1. Read ?context= + session from URL
-    //   2. Call CDC to exchange for an auth code
-    //   3. Redirect browser to redirect_uri?code=XXXX
-    //   4. Postman intercepts the callback and gets the token
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  UTILITY
+// ════════════════════════════════════════════════════════════════════════════
+function setStatus(msg, type) {
+  var bar = document.getElementById('status-bar');
+  bar.innerHTML = msg;
+  bar.className = type; // 'info' | 'success' | 'error'
+}
 
+// ════════════════════════════════════════════════════════════════════════════
+//  onGigyaServiceReady
+//  ───────────────────
+//  Automatically called by gigya.js once the SDK has fully initialised.
+//  This is the entry point for the OIDC proxy flow.
+//
+//  When Postman calls the CDC /authorize endpoint, CDC redirects the browser
+//  to this page and appends ?context=SIGNED_JWT to the URL.
+//  We detect that parameter and drive the full 4-step exchange.
+// ════════════════════════════════════════════════════════════════════════════
 window.onGigyaServiceReady = function() {
-  var params = new URLSearchParams(window.location.search);
+  var params  = new URLSearchParams(window.location.search);
+  var context = params.get('context');
 
-  if (params.get('context')) {
-    setStatus('🔄 Completing OIDC authentication… please wait', 'info');
-
-    // Call getContextData to see what it returns
-    gigya.oidc.op.getContextData({
-      callback: function(response) {
-        console.log('[OIDC] getContextData response:', JSON.stringify(response, null, 2));
-        setStatus('✅ Context data received - check console', 'success');
-      }
-    });
+  if (!context) {
+    // Normal page load — no OIDC flow in progress
+    console.log('[CDC] onGigyaServiceReady — no ?context in URL, normal page load');
     return;
   }
+
+  console.log('[OIDC] ?context detected — starting proxy authorization flow');
+  setStatus('🔄 <strong>Step 1 / 4</strong> — OIDC context detected in URL. Decoding context JWT…', 'info');
+
+  // ── STEP 1: Decode the context JWT ───────────────────────────────────────
+  //
+  //  gigya.oidc.op.getContextData() verifies and decodes the signed context
+  //  token that CDC placed in the URL. The response contains:
+  //    • client_id      — which RP (Postman) initiated the flow
+  //    • redirect_uri   — where to send the code (Postman callback)
+  //    • issuer         — confirms this is our CDC tenant
+  //    • issued_at / expiration_time
+  //
+  //  IMPORTANT: gigya.oidc.js is a DATA HELPER only. It provides no function
+  //  to auto-complete the OIDC flow — that must be driven manually (Steps 3-4).
+  gigya.oidc.op.getContextData({
+    callback: function(ctx) {
+      console.log('[OIDC] Step 1 — getContextData:', JSON.stringify(ctx, null, 2));
+
+      if (ctx.errorCode !== 0) {
+        setStatus('❌ <strong>Step 1 failed</strong> — context decode error: ' + ctx.errorMessage, 'error');
+        return;
+      }
+
+      setStatus('🔄 <strong>Step 2 / 4</strong> — Context decoded (client: ' + ctx.client_id + '). Checking active CDC session…', 'info');
+
+      // ── STEP 2: Retrieve active session proof ─────────────────────────────
+      //
+      //  getAccountInfo() returns the current CDC session data including:
+      //    • UID               — unique user identifier
+      //    • UIDSignature      — HMAC-SHA1 signature proving session ownership
+      //    • signatureTimestamp — timestamp used to generate the signature
+      //
+      //  These three values together are CDC's server-side proof that the
+      //  user is genuinely authenticated. The /authorize endpoint will reject
+      //  the request if these don't match a live session.
+      //
+      //  If there is no active session, we show the login screen and reload
+      //  afterwards so the OIDC flow restarts with the context still in the URL.
+      gigya.accounts.getAccountInfo({
+        callback: function(account) {
+          console.log('[OIDC] Step 2 — getAccountInfo errorCode:', account.errorCode);
+
+          if (account.errorCode !== 0) {
+            console.log('[OIDC] No active session — showing login screen');
+            setStatus('⚠️ <strong>Step 2</strong> — No active session. Please log in to continue the OIDC flow.', 'error');
+            gigya.accounts.showScreenSet({
+              screenSet:   'Default-RegistrationLogin',
+              startScreen: 'gigya-login-screen',
+              containerID: 'screen-container',
+              onLogin: function() {
+                // Reload with same ?context= URL to retry the flow
+                window.location.reload();
+              }
+            });
+            return;
+          }
+
+          // ── STEP 3: Build /authorize URL with session proof ──────────────
+          //
+          //  Construct the CDC fidm /authorize endpoint URL combining:
+          //    • Standard OIDC params from the original request
+          //    • context      — the opaque context token (must be passed through)
+          //    • UID          — from the active CDC session
+          //    • UIDSignature — HMAC proof of session validity
+          //    • signatureTimestamp — used in HMAC calculation
+          //
+          //  CDC validates this combination server-side and, if valid, issues
+          //  an authorization code and redirects to the redirect_uri.
+          var uid          = account.UID;
+          var uidSig       = account.UIDSignature;
+          var sigTimestamp = account.signatureTimestamp;
+          var redirectUri  = ctx.redirect_uri;
+          var clientId     = ctx.client_id;
+          var scope        = params.get('scope') || 'openid';
+          var state        = params.get('state') || '';
+
+          console.log('[OIDC] Step 3 — Building authorize URL');
+          console.log('[OIDC]   client_id   :', clientId);
+          console.log('[OIDC]   redirect_uri:', redirectUri);
+          console.log('[OIDC]   scope       :', scope);
+          console.log('[OIDC]   UID         :', uid);
+
+          setStatus('🔄 <strong>Step 3 / 4</strong> — Session verified (UID: ' + uid.substring(0, 12) + '…). Building authorize request…', 'info');
+
+          var authorizeUrl =
+            'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg/authorize'
+            + '?response_type=code'
+            + '&client_id='          + encodeURIComponent(clientId)
+            + '&redirect_uri='       + encodeURIComponent(redirectUri)
+            + '&scope='              + encodeURIComponent(scope)
+            + '&context='            + encodeURIComponent(context)
+            + '&UID='                + encodeURIComponent(uid)
+            + '&UIDSignature='       + encodeURIComponent(uidSig)
+            + '&signatureTimestamp=' + encodeURIComponent(sigTimestamp)
+            + (state ? '&state='    + encodeURIComponent(state) : '');
+
+          console.log('[OIDC] Step 4 — Redirecting browser to:', authorizeUrl);
+          setStatus('🔄 <strong>Step 4 / 4</strong> — Redirecting to CDC to issue authorization code. Postman will receive the code…', 'info');
+
+          // ── STEP 4: Redirect browser to CDC /authorize ───────────────────
+          //
+          //  CDC validates the UID + UIDSignature, creates a short-lived
+          //  authorization code and issues a 302 redirect to:
+          //    https://oauth.pstmn.io/v1/callback?code=XXXX&state=YYYY
+          //
+          //  Postman intercepts that redirect and automatically calls /token
+          //  to exchange the code for an access_token JWT containing the
+          //  scoped claims configured in the CDC Admin Console.
+          window.location.href = authorizeUrl;
+        }
+      });
+    }
+  });
 };
 
-    // ── Passkey / Screen Sets ─────────────────────────────────
-    function showPasskeyRegister() {
-      setStatus('Loading passkey registration screen…', 'info');
-      gigya.accounts.showScreenSet({
-        screenSet: 'Default-RegistrationLogin',
-        startScreen: 'gigya-passkey-registration-screen',
-        containerID: 'screen-container',
-        onAfterSubmit: function(e) {
-          if (e.response && e.response.errorCode === 0) {
-            setStatus('✅ Passkey registered successfully!', 'success');
-          }
-        },
-        onError: function(e) {
-          setStatus('❌ Error: ' + (e.errorMessage || 'Unknown error'), 'error');
-        }
-      });
-    }
+// ════════════════════════════════════════════════════════════════════════════
+//  DEBUG BUTTON — inspect current URL for OIDC context
+// ════════════════════════════════════════════════════════════════════════════
+function checkOidcContext() {
+  var params  = new URLSearchParams(window.location.search);
+  var context = params.get('context');
+  if (context) {
+    setStatus(
+      '✅ <strong>?context found</strong> (' + context.length + ' chars). ' +
+      'An OIDC flow is active — onGigyaServiceReady will pick this up on page load.',
+      'success'
+    );
+    console.log('[OIDC] Raw context value:', context);
+  } else {
+    setStatus('ℹ️ No <code>?context=</code> in URL. This is a normal page load — no OIDC flow in progress.', 'info');
+  }
+}
 
-    function showStandardLogin() {
-      setStatus('Loading login screen…', 'info');
-      gigya.accounts.showScreenSet({
-        screenSet: 'Default-RegistrationLogin',
-        startScreen: 'gigya-login-screen',
-        containerID: 'screen-container',
-        onLogin: function(e) {
-          setStatus('✅ Logged in as: ' + (e.profile && e.profile.email || e.UID), 'success');
-        },
-        onError: function(e) {
-          setStatus('❌ Login error: ' + (e.errorMessage || 'Unknown error'), 'error');
-        }
-      });
+// ════════════════════════════════════════════════════════════════════════════
+//  PASSKEY & SCREEN SETS
+// ════════════════════════════════════════════════════════════════════════════
+function showPasskeyRegister() {
+  setStatus('Loading passkey registration screen…', 'info');
+  gigya.accounts.showScreenSet({
+    screenSet:   'Default-RegistrationLogin',
+    startScreen: 'gigya-passkey-registration-screen',
+    containerID: 'screen-container',
+    onAfterSubmit: function(e) {
+      if (e.response && e.response.errorCode === 0) {
+        setStatus('✅ Passkey registered successfully!', 'success');
+      }
+    },
+    onError: function(e) {
+      setStatus('❌ Passkey error: ' + (e.errorMessage || 'Unknown'), 'error');
     }
+  });
+}
 
-    // ── Session / Account ─────────────────────────────────────
-    function checkSession() {
-      gigya.accounts.getAccountInfo({
-        callback: function(res) {
-          if (res.errorCode === 0) {
-            setStatus('✅ Active session — UID: ' + res.UID + ' | Email: ' + (res.profile && res.profile.email || 'n/a'), 'success');
-          } else {
-            setStatus('⚠️ No active session (code ' + res.errorCode + ')', 'error');
-          }
-        }
-      });
+function showStandardLogin() {
+  setStatus('Loading login screen…', 'info');
+  gigya.accounts.showScreenSet({
+    screenSet:   'Default-RegistrationLogin',
+    startScreen: 'gigya-login-screen',
+    containerID: 'screen-container',
+    onLogin: function(e) {
+      setStatus(
+        '✅ Logged in — ' + (e.profile && e.profile.email ? e.profile.email : e.UID),
+        'success'
+      );
+    },
+    onError: function(e) {
+      setStatus('❌ Login error: ' + (e.errorMessage || 'Unknown'), 'error');
     }
+  });
+}
 
-    function getAccountInfo() {
-      gigya.accounts.getAccountInfo({
-        include: 'profile,data,preferences',
-        callback: function(res) {
-          if (res.errorCode === 0) {
-            setStatus('✅ Account loaded — check browser console for full payload', 'success');
-            console.log('[CDC] Account Info:', JSON.stringify(res, null, 2));
-          } else {
-            setStatus('❌ getAccountInfo failed: ' + res.errorMessage, 'error');
-          }
-        }
-      });
+// ════════════════════════════════════════════════════════════════════════════
+//  SESSION & ACCOUNT INFO
+// ════════════════════════════════════════════════════════════════════════════
+function checkSession() {
+  gigya.accounts.getAccountInfo({
+    callback: function(res) {
+      if (res.errorCode === 0) {
+        setStatus(
+          '✅ Active session — UID: <strong>' + res.UID + '</strong>' +
+          (res.profile && res.profile.email ? ' | Email: ' + res.profile.email : ''),
+          'success'
+        );
+      } else {
+        setStatus('⚠️ No active session (errorCode: ' + res.errorCode + ')', 'error');
+      }
     }
+  });
+}
 
-    function doLogout() {
-      gigya.accounts.logout({
-        callback: function(res) {
-          setStatus('👋 Logged out successfully', 'info');
-          document.getElementById('screen-container').innerHTML = '';
-        }
-      });
+function getAccountInfo() {
+  gigya.accounts.getAccountInfo({
+    include: 'profile,data,preferences',
+    callback: function(res) {
+      if (res.errorCode === 0) {
+        setStatus(
+          '✅ Account info loaded — open <strong>DevTools → Console</strong> to see the full JSON payload',
+          'success'
+        );
+        console.log('[CDC] Full Account Info:', JSON.stringify(res, null, 2));
+      } else {
+        setStatus('❌ getAccountInfo failed: ' + res.errorMessage + ' (code ' + res.errorCode + ')', 'error');
+      }
     }
-  </script>
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LOGOUT
+// ════════════════════════════════════════════════════════════════════════════
+function doLogout() {
+  gigya.accounts.logout({
+    callback: function() {
+      setStatus('👋 Logged out — CDC session cleared', 'info');
+      document.getElementById('screen-container').innerHTML = '';
+    }
+  });
+}
+</script>
 
 </body>
 </html>
