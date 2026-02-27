@@ -222,22 +222,21 @@
     //   3. Redirect browser to redirect_uri?code=XXXX
     //   4. Postman intercepts the callback and gets the token
 
-  window.onGigyaServiceReady = function() {
+window.onGigyaServiceReady = function() {
   var params = new URLSearchParams(window.location.search);
 
   if (params.get('context')) {
     setStatus('🔄 Completing OIDC authentication… please wait', 'info');
     
-    // Dump ALL available methods on gigya.oidc to console
-    console.log('[OIDC] gigya.oidc object:', gigya.oidc);
-    console.log('[OIDC] gigya.oidc keys:', Object.keys(gigya.oidc || {}));
-    console.log('[OIDC] gigya.oidc methods:');
-    for (var key in gigya.oidc) {
-      console.log('  gigya.oidc.' + key, '=', typeof gigya.oidc[key]);
+    // Dump what's inside gigya.oidc.op
+    console.log('[OIDC] gigya.oidc.op:', gigya.oidc.op);
+    console.log('[OIDC] gigya.oidc.op keys:', Object.keys(gigya.oidc.op || {}));
+    for (var key in gigya.oidc.op) {
+      console.log('  gigya.oidc.op.' + key, '=', typeof gigya.oidc.op[key]);
     }
     return;
   }
- };
+};
 
     // ── Passkey / Screen Sets ─────────────────────────────────
     function showPasskeyRegister() {
