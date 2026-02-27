@@ -221,27 +221,23 @@
     //   2. Call CDC to exchange for an auth code
     //   3. Redirect browser to redirect_uri?code=XXXX
     //   4. Postman intercepts the callback and gets the token
-    window.onGigyaServiceReady = function() {
-      var params = new URLSearchParams(window.location.search);
 
-      if (params.get('context')) {
-        // OIDC flow in progress
-        // gigya.oidc.js auto-handles this - no manual call needed
-        setStatus('🔄 Completing OIDC authentication… please wait', 'info');
+  window.onGigyaServiceReady = function() {
+  var params = new URLSearchParams(window.location.search);
 
-        // Debug info in console to help trace the flow
-        console.log('[OIDC] context detected in URL');
-        console.log('[OIDC] gigya.oidc available:', typeof gigya.oidc);
-        console.log('[OIDC] UID in URL:', params.get('UID'));
-        console.log('[OIDC] mode:', params.get('mode'));
-        console.log('[OIDC] scope:', params.get('scope'));
-
-        return; // Skip normal page setup - let gigya.oidc.js do its work
-      }
-
-      // Normal page load - nothing extra needed
-      console.log('[CDC] Page ready - no OIDC context detected');
-    };
+  if (params.get('context')) {
+    setStatus('🔄 Completing OIDC authentication… please wait', 'info');
+    
+    // Dump ALL available methods on gigya.oidc to console
+    console.log('[OIDC] gigya.oidc object:', gigya.oidc);
+    console.log('[OIDC] gigya.oidc keys:', Object.keys(gigya.oidc || {}));
+    console.log('[OIDC] gigya.oidc methods:');
+    for (var key in gigya.oidc) {
+      console.log('  gigya.oidc.' + key, '=', typeof gigya.oidc[key]);
+    }
+    return;
+  }
+ };
 
     // ── Passkey / Screen Sets ─────────────────────────────────
     function showPasskeyRegister() {
