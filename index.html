@@ -17,20 +17,31 @@
 
   <!--
     ============================================================
-    STEP 2: Load OIDC handler
-    Reads ?context= from URL and completes the OIDC flow.
-    Must load AFTER gigya.js.
-    The JSON config inside the script tag sets where CDC
-    should redirect for login, consent, and errors.
+    STEP 2: Set OIDC config in window BEFORE loading gigya.oidc.js
+    NOTE: JSON cannot go inside an external script tag body -
+    it must be set as a global variable beforehand.
+    ============================================================
+  -->
+  <script type="text/javascript">
+    window.__gigyaOIDCConfig = {
+      loginURL:   "https://kingcode-software.github.io/spar-poc/",
+      consentURL: "https://kingcode-software.github.io/spar-poc/",
+      errorURL:   "https://kingcode-software.github.io/spar-poc/"
+    };
+  </script>
+
+  <!--
+    ============================================================
+    STEP 3: Load OIDC handler AFTER config is set
+    gigya.oidc.js automatically detects ?context= in the URL
+    and completes the authorization code flow by itself -
+    no manual function call needed.
+    It will redirect the browser to your redirect_uri with
+    ?code=XXXX appended, which Postman's callback intercepts.
     ============================================================
   -->
   <script type="text/javascript"
     src="https://cdns.eu1.gigya.com/JS/gigya.oidc.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg">
-  {
-    "loginURL": "https://kingcode-software.github.io/spar-poc/",
-    "consentURL": "https://kingcode-software.github.io/spar-poc/",
-    "errorURL": "https://kingcode-software.github.io/spar-poc/"
-  }
   </script>
 
   <style>
@@ -202,23 +213,34 @@
     }
 
     // ── OIDC Context Handler ──────────────────────────────────
-    // Called automatically by Gigya SDK when it is ready.
-    // If ?context= is in the URL it means CDC has redirected
-    // back to this page to complete the OIDC authorization flow.
-    // gigya.oidc.handleOPRedirect() reads the context + UID
-    // from the URL and performs the final redirect back to the
-    // client (Postman callback) with ?code=XXXX appended.
+    // onGigyaServiceReady fires when gigya.js is fully loaded.
+    // If ?context= is present, gigya.oidc.js handles everything
+    // automatically - we just show a status message and return.
+    // gigya.oidc.js will:
+    //   1. Read ?context= + session from URL
+    //   2. Call CDC to exchange for an auth code
+    //   3. Redirect browser to redirect_uri?code=XXXX
+    //   4. Postman intercepts the callback and gets the token
     window.onGigyaServiceReady = function() {
       var params = new URLSearchParams(window.location.search);
 
       if (params.get('context')) {
-        // OIDC flow in progress - complete the handshake
-        setStatus('🔄 Completing OIDC authentication…', 'info');
-        gigya.oidc.handleOPRedirect();
-        return; // Skip normal page setup
+        // OIDC flow in progress
+        // gigya.oidc.js auto-handles this - no manual call needed
+        setStatus('🔄 Completing OIDC authentication… please wait', 'info');
+
+        // Debug info in console to help trace the flow
+        console.log('[OIDC] context detected in URL');
+        console.log('[OIDC] gigya.oidc available:', typeof gigya.oidc);
+        console.log('[OIDC] UID in URL:', params.get('UID'));
+        console.log('[OIDC] mode:', params.get('mode'));
+        console.log('[OIDC] scope:', params.get('scope'));
+
+        return; // Skip normal page setup - let gigya.oidc.js do its work
       }
 
-      // Normal page load — nothing extra needed
+      // Normal page load - nothing extra needed
+      console.log('[CDC] Page ready - no OIDC context detected');
     };
 
     // ── Passkey / Screen Sets ─────────────────────────────────
