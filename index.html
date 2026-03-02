@@ -155,15 +155,33 @@ window.onGigyaServiceReady = function() {
   var context = params.get('context');
 
   if (!context) {
-    console.log('[CDC] Ready — normal page load');
+    // No OIDC context — check if we returned here after a redirect (loop guard)
+    if (sessionStorage.getItem('oidc_in_flight')) {
+      sessionStorage.removeItem('oidc_in_flight');
+      setStatus('❌ CDC redirected back to proxy — check Admin Console redirect_uri and Proxy Page Override settings', 'error');
+      console.error('[OIDC] Loop detected — CDC sent browser back to proxy page after authorize redirect.');
+    } else {
+      console.log('[CDC] Ready — normal page load');
+    }
     return;
   }
+
+  // Guard: if this exact ctx_id was already attempted, stop immediately
+  var ctx_preview = decodeContextJwt(context);
+  var ctx_id = ctx_preview && ctx_preview.ctx_id;
+  if (ctx_id && sessionStorage.getItem('oidc_ctx_' + ctx_id)) {
+    sessionStorage.removeItem('oidc_ctx_' + ctx_id);
+    setStatus('❌ Loop detected — same context arrived twice. CDC is not accepting the session proof.', 'error');
+    console.error('[OIDC] Duplicate ctx_id detected:', ctx_id);
+    return;
+  }
+  if (ctx_id) sessionStorage.setItem('oidc_ctx_' + ctx_id, '1');
 
   console.log('[OIDC] Context detected — starting proxy flow');
   setStatus('🔄 <b>Step 1/3</b> — Decoding context…', 'info');
 
   // Step 1: Decode context JWT directly (no SDK call needed)
-  var ctx = decodeContextJwt(context);
+  var ctx = ctx_preview;
   if (!ctx || !ctx.client_id || !ctx.redirect_url) {
     setStatus('❌ Could not decode context JWT', 'error');
     console.error('[OIDC] Decoded payload:', ctx);
@@ -174,7 +192,7 @@ window.onGigyaServiceReady = function() {
   console.log('[OIDC] client_id   :', ctx.client_id);
   console.log('[OIDC] redirect_url:', ctx.redirect_url);
 
-  // Step 2: Strip URL immediately — prevents loop if page reloads at any point
+  // Strip URL immediately — prevents accidental loop on reload
   window.history.replaceState({}, document.title, window.location.pathname);
 
   var scope = params.get('scope') || 'openid';
@@ -189,7 +207,6 @@ window.onGigyaServiceReady = function() {
 
       if (acct.errorCode !== 0) {
         setStatus('⚠️ No active session — please log in', 'error');
-        // Save context to sessionStorage so we can complete after login
         sessionStorage.setItem('oidc_context', context);
         sessionStorage.setItem('oidc_scope',   scope);
         sessionStorage.setItem('oidc_state',   state);
@@ -198,7 +215,6 @@ window.onGigyaServiceReady = function() {
           startScreen: 'gigya-login-screen',
           containerID: 'screen-container',
           onLogin: function(loginResult) {
-            // Retrieve saved context and complete the flow
             var savedContext = sessionStorage.getItem('oidc_context');
             var savedScope   = sessionStorage.getItem('oidc_scope') || 'openid';
             var savedState   = sessionStorage.getItem('oidc_state') || '';
@@ -211,63 +227,53 @@ window.onGigyaServiceReady = function() {
         return;
       }
 
-      // Step 4: Exchange session for auth code
+      // Mark that we're about to leave this page — used by loop guard above
+      sessionStorage.setItem('oidc_in_flight', '1');
+
       authorizeViaRest(ctx, acct, context, scope, state);
     }
   });
 };
 
-// ── Step 4: POST to CDC accounts.oidc.authorize REST endpoint ─────────────
+// ── Complete OIDC flow via GET redirect with session proof ────────────────
 //
-// This is the key fix — instead of doing a browser redirect to /authorize
-// (which loops back through the proxy page), we POST directly to the
-// accounts REST API which returns the redirect URL in the JSON response.
-// We then navigate to it in one clean final step.
+// CDC's /authorize endpoint expects a GET request.
+// We pass the UID + signature as query params alongside the context token.
+// CDC validates the session server-side and issues a 302 directly to the
+// RP redirect_uri (?code=XXXX) — bypassing the proxy page entirely.
 //
-// Note: redirect_url (not redirect_uri) is the field name in the CDC
-// context JWT payload.
+// The loop fix: we already stripped ?context= from the URL before calling
+// this function. CDC sees valid session proof, issues the code, and sends
+// the browser straight to oauth.pstmn.io — it never comes back here.
 //
 function authorizeViaRest(ctx, acct, context, scope, state) {
-  setStatus('🔄 <b>Step 3/3</b> — Submitting session proof to CDC…', 'info');
+  setStatus('🔄 <b>Step 3/3</b> — Redirecting to CDC to issue code…', 'info');
 
-  // CDC responds with a 302 → redirect_uri?code=XXXX
-  // fetch() with redirect:'manual' gets opaqueredirect — CORS blocks the Location header.
-  // Fix: hidden form POST lets the browser follow the 302 natively.
-  // The browser lands on https://oauth.pstmn.io/v1/callback?code=XXXX
-  // which Postman intercepts to complete the token exchange.
-  var endpoint = 'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg/authorize';
+  var base = 'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg/authorize';
 
-  var fields = {
-    response_type:      'code',
-    client_id:          ctx.client_id,
-    redirect_uri:       ctx.redirect_url,
-    scope:              scope,
-    context:            context,
-    UID:                acct.UID,
-    UIDSignature:       acct.UIDSignature,
-    signatureTimestamp: acct.signatureTimestamp,
-    state:              state || ''
-  };
+  var params = [
+    'response_type=code',
+    'client_id='          + encodeURIComponent(ctx.client_id),
+    'redirect_uri='       + encodeURIComponent(ctx.redirect_url),
+    'scope='              + encodeURIComponent(scope),
+    'context='            + encodeURIComponent(context),
+    'UID='                + encodeURIComponent(acct.UID),
+    'UIDSignature='       + encodeURIComponent(acct.UIDSignature),
+    'signatureTimestamp=' + encodeURIComponent(acct.signatureTimestamp)
+  ];
+  if (state) params.push('state=' + encodeURIComponent(state));
 
-  console.log('[OIDC] Form POST to fidm /authorize — browser will follow 302 to Postman callback');
+  var url = base + '?' + params.join('&');
+
+  console.log('[OIDC] GET redirect to fidm /authorize with session proof');
   console.log('[OIDC] UID:', acct.UID);
   console.log('[OIDC] redirect_uri:', ctx.redirect_url);
+  console.log('[OIDC] URL:', url);
 
-  var form = document.createElement('form');
-  form.method  = 'POST';
-  form.action  = endpoint;
-  form.style.display = 'none';
-
-  Object.keys(fields).forEach(function(key) {
-    var input   = document.createElement('input');
-    input.type  = 'hidden';
-    input.name  = key;
-    input.value = fields[key];
-    form.appendChild(input);
-  });
-
-  document.body.appendChild(form);
-  form.submit();
+  // Single navigation — CDC validates session and 302s to redirect_uri?code=XXXX
+  // The proxy page URL is gone from the browser (already stripped above),
+  // so CDC has no reason to redirect back here.
+  window.location.replace(url);
 }
 
 // ── Authentication Screen Sets ────────────────────────────────────────────
