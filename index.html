@@ -353,49 +353,71 @@ function onSessionActive(res) {
 }
 
 // ── OIDC Flow ─────────────────────────────────────────────────────
-async function startOidcFlow() {
-  const c = CONFIG.clients[currentClient];
+function startOidcFlow() {
+  setStatus('🔄 Fetching session proof from CDC…', 'info');
 
-  setStatus('🔄 Generating PKCE parameters…', 'info');
-  setStep(2);
+  gigya.accounts.getAccountInfo({
+    callback: async function(res) {
 
-  // Generate PKCE + state
-  const pkce = await generatePKCE();
+      if (res.errorCode !== 0) {
+        setStatus('❌ No active CDC session (code ' + res.errorCode + ') — please log in first.', 'error');
+        setStep(1);
+        return;
+      }
 
-  // Persist verifier and state — needed when CDC redirects back
-  sessionStorage.setItem('pkce_verifier',  pkce.verifier);
-  sessionStorage.setItem('pkce_state',     pkce.state);
-  sessionStorage.setItem('oidc_client',    currentClient);
-  sessionStorage.setItem('oidc_client_id', c.clientId);
+      const uid       = res.UID;
+      const sig       = res.UIDSignature;
+      const timestamp = res.signatureTimestamp;
 
-  // Show PKCE detail card
-  document.getElementById('pkceCard').style.display = 'block';
-  document.getElementById('pkceBox').textContent =
-    'code_verifier         : ' + pkce.verifier + '\n' +
-    'code_challenge        : ' + pkce.challenge + '\n' +
-    'code_challenge_method : S256\n' +
-    'state                 : ' + pkce.state;
+      if (!uid || !sig || !timestamp) {
+        setStatus('❌ Session proof incomplete — missing UID, UIDSignature or signatureTimestamp', 'error');
+        console.error('[OIDC] Incomplete getAccountInfo response:', res);
+        return;
+      }
 
-  setStep(2, true);
-  setStep(3);
-  setStatus('🔄 Redirecting to SAP CDC /authorize…', 'info');
+      console.log('[OIDC] Session proof obtained. UID:', uid);
 
-  // Build authorization URL
-  const params = new URLSearchParams({
-    response_type:          'code',
-    client_id:              c.clientId,
-    redirect_uri:           CONFIG.redirectUri,
-    scope:                  c.scopes,
-    state:                  pkce.state,
-    code_challenge:         pkce.challenge,
-    code_challenge_method:  'S256'
+      const c = CONFIG.clients[currentClient];
+
+      setStatus('🔄 Generating PKCE parameters…', 'info');
+      setStep(2);
+
+      const pkce = await generatePKCE();
+
+      sessionStorage.setItem('pkce_verifier',  pkce.verifier);
+      sessionStorage.setItem('pkce_state',     pkce.state);
+      sessionStorage.setItem('oidc_client',    currentClient);
+      sessionStorage.setItem('oidc_client_id', c.clientId);
+
+      document.getElementById('pkceCard').style.display = 'block';
+      document.getElementById('pkceBox').textContent =
+        'code_verifier         : ' + pkce.verifier + '\n' +
+        'code_challenge        : ' + pkce.challenge + '\n' +
+        'code_challenge_method : S256\n' +
+        'state                 : ' + pkce.state;
+
+      setStep(2, true);
+      setStep(3);
+      setStatus('🔄 Redirecting to SAP CDC /authorize with session proof…', 'info');
+
+      const params = new URLSearchParams({
+        response_type:         'code',
+        client_id:             c.clientId,
+        redirect_uri:          CONFIG.redirectUri,
+        scope:                 c.scopes,
+        state:                 pkce.state,
+        code_challenge:        pkce.challenge,
+        code_challenge_method: 'S256',
+        UID:                   uid,
+        UIDSignature:          sig,
+        signatureTimestamp:    timestamp
+      });
+
+      const authUrl = CONFIG.oidcBase + '/authorize?' + params.toString();
+      console.log('[OIDC] Redirecting to /authorize with session proof');
+      window.location.href = authUrl;
+    }
   });
-
-  const authUrl = CONFIG.oidcBase + '/authorize?' + params.toString();
-
-  // Navigate — SAP CDC will authenticate (using existing session cookie from gigya.js)
-  // and redirect back to redirectUri?code=…&state=…
-  window.location.href = authUrl;
 }
 
 // ── Callback handler — runs when ?code= is present on page load ───
@@ -433,7 +455,7 @@ async function handleCallback(params) {
 
   // POST to backend /callback — backend holds client_secret, exchanges code, validates JWT
   try {
-    const res = await fetch(CONFIG.backendBase + '/callback', {
+    const res = await fetch(CONFIG.backendBase + '/oidc/callback', {
       method:      'POST',
       headers:     { 'Content-Type': 'application/json' },
       credentials: 'include',           // send/receive HttpOnly session cookie
