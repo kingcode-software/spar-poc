@@ -189,8 +189,8 @@
 <div class="card">
   <h2><span class="step-badge">Steps 2&ndash;9</span> OIDC Client &amp; Flow</h2>
   <div class="tab-group">
-    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A &mdash; Normal</button>
-    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B &mdash; Extra</button>
+    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A &mdash; Basic</button>
+    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B &mdash; Identity</button>
   </div>
   <div class="client-info" id="clientInfo">
     <span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span>
@@ -315,7 +315,7 @@
 
 <footer>
   EU1 &nbsp;&middot;&nbsp; API: 4_q7bWSrrfARGv_vP1knVRIg
-  &nbsp;&middot;&nbsp;</span>
+  &nbsp;&middot;&nbsp; Client: <span id="footerClient">A &mdash; P8KZKW6_rpayN8d0m2y-tUds</span>
   <br/>Backend: https://localhost:7187 &nbsp;&middot;&nbsp; Flow: Authorization Code + PKCE (Confidential BFF)
 </footer>
 
@@ -339,7 +339,7 @@ var CONFIG = {
     B: {
       clientId: 'U_XwKfuhT-wL5cbVQYZ47En0',
       scopes:   'openid profile email basic_identity',
-      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span> <span class="scope-tag extra">basic_identity</span>&nbsp;&middot;&nbsp;<code>/oidc/openid</code>&#10003;&nbsp;&middot;&nbsp;<code>/oidc/basic_identity</code> &#10003;'
+      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span> <span class="scope-tag extra">basic_identity</span>&nbsp;&middot;&nbsp;<code>/oidc/openid</code> &#10003;&nbsp;&middot;&nbsp;<code>/oidc/basic_identity</code> &#10003;'
     }
   }
 };
@@ -351,6 +351,7 @@ var currentClient = 'A';
 // ─────────────────────────────────────────────────────────────────────
 function setStatus(msg, type) {
   var el = document.getElementById('status');
+  if (!el) return;
   el.innerHTML = msg;
   el.className = type;
 }
@@ -371,9 +372,12 @@ function advanceTo(n) {
 }
 
 function resetOutputCards() {
-  document.getElementById('pkceCard').style.display     = 'none';
-  document.getElementById('tokenCard').style.display    = 'none';
-  document.getElementById('endpointCard').style.display = 'none';
+  var p = document.getElementById('pkceCard');
+  var t = document.getElementById('tokenCard');
+  var e = document.getElementById('endpointCard');
+  if (p) p.style.display = 'none';
+  if (t) t.style.display = 'none';
+  if (e) e.style.display = 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -402,10 +406,14 @@ async function generatePKCE() {
 // ─────────────────────────────────────────────────────────────────────
 function selectClient(key) {
   currentClient = key;
-  document.getElementById('tabA').className = 'tab' + (key === 'A' ? ' active' : '');
-  document.getElementById('tabB').className = 'tab' + (key === 'B' ? ' active' : '');
-  document.getElementById('clientInfo').innerHTML = CONFIG.clients[key].infoHtml;
-  document.getElementById('footerClient').textContent = key + ' \u2014 ' + CONFIG.clients[key].clientId;
+  var tabA = document.getElementById('tabA');
+  var tabB = document.getElementById('tabB');
+  var info = document.getElementById('clientInfo');
+  var foot = document.getElementById('footerClient');
+  if (tabA) tabA.className = 'tab' + (key === 'A' ? ' active' : '');
+  if (tabB) tabB.className = 'tab' + (key === 'B' ? ' active' : '');
+  if (info) info.innerHTML = CONFIG.clients[key].infoHtml;
+  if (foot) foot.textContent = key + ' \u2014 ' + CONFIG.clients[key].clientId;
   resetOutputCards();
   advanceTo(1);
 }
@@ -564,7 +572,16 @@ async function handleCallback(params) {
   sessionStorage.removeItem('oidc_client');
   sessionStorage.removeItem('oidc_client_id');
 
-  selectClient(savedClient);
+  // Restore client tab state without resetting the flow tracker
+  currentClient = savedClient;
+  var tabA = document.getElementById('tabA');
+  var tabB = document.getElementById('tabB');
+  var info = document.getElementById('clientInfo');
+  var foot = document.getElementById('footerClient');
+  if (tabA) tabA.className = 'tab' + (savedClient === 'A' ? ' active' : '');
+  if (tabB) tabB.className = 'tab' + (savedClient === 'B' ? ' active' : '');
+  if (info) info.innerHTML = CONFIG.clients[savedClient].infoHtml;
+  if (foot) foot.textContent = savedClient + ' \u2014 ' + CONFIG.clients[savedClient].clientId;
 
   // Step 5 — Code received
   advanceTo(5);
