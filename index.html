@@ -3,518 +3,679 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SPAR POC – Passkey &amp; OIDC</title>
+  <title>SPAR POC – OIDC Authorization Code + PKCE</title>
 
   <!--
-    SCRIPT LOAD ORDER (critical):
-      1. gigya.js  — initialises gigya global + establishes CDC session cookie
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  CONFIRMED FLOW — Authorization Code + PKCE (Confidential BFF)  ║
+  ║                                                                  ║
+  ║  Step 1  User logs in via CDC Screen-Set (gigya.js)              ║
+  ║  Step 2  SPA generates PKCE (code_verifier + challenge + state)  ║
+  ║  Step 3  [CDC-SPECIFIC] Fetch session proof — UID + UIDSignature ║
+  ║          Needed because cdns.eu1 ≠ fidm.eu1 (different domains) ║
+  ║          ➜ WSO2 future state: this step is removed entirely      ║
+  ║  Step 4  Browser redirects to CDC /authorize (PKCE + proof)      ║
+  ║  Step 5  CDC returns ?code= to redirect_uri                      ║
+  ║  Step 6  SPA validates state, POSTs code + verifier to backend   ║
+  ║  Step 7  Backend exchanges code at CDC /token (secret server-side)║
+  ║  Step 8  Backend validates JWT, sets HttpOnly session cookie     ║
+  ║  Step 9  SPA calls /basic and /identity — scope enforced         ║
+  ╚══════════════════════════════════════════════════════════════════╝
   -->
   <script src="https://cdns.eu1.gigya.com/JS/gigya.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg"></script>
 
   <style>
     :root {
-      --dark: #003366; --mid: #0055aa; --light: #e8f0fb;
-      --red: #e8001c; --text: #1a1a2e; --muted: #6b7280; --r: 10px;
+      --dark:   #003366;
+      --mid:    #0055aa;
+      --light:  #e8f0fb;
+      --red:    #e8001c;
+      --green:  #16a34a;
+      --amber:  #d97706;
+      --text:   #1a1a2e;
+      --muted:  #6b7280;
+      --border: #e2e8f0;
+      --r:      10px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
       background: var(--light); color: var(--text);
       min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; padding: 32px 20px;
+      align-items: center; padding: 32px 20px 60px;
     }
+
     header { text-align: center; margin-bottom: 24px; }
     header h1 { font-size: 1.8rem; color: var(--dark); }
-    header p  { color: var(--muted); margin-top: 6px; font-size: 0.9rem; }
+    header p  { color: var(--muted); margin-top: 6px; font-size: 0.88rem; }
 
     .card {
       background: white; border-radius: var(--r);
       box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-      padding: 22px; width: 100%; max-width: 540px; margin-bottom: 16px;
+      padding: 20px 22px; width: 100%; max-width: 560px; margin-bottom: 14px;
     }
     .card h2 {
-      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.2px;
-      color: var(--dark); margin-bottom: 14px;
-      padding-bottom: 8px; border-bottom: 2px solid var(--light);
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--dark); margin-bottom: 14px; padding-bottom: 8px;
+      border-bottom: 2px solid var(--light);
+      display: flex; align-items: center; gap: 8px;
     }
+    .step-badge {
+      background: var(--dark); color: white;
+      font-size: 0.65rem; font-weight: 700; padding: 2px 7px;
+      border-radius: 20px; letter-spacing: 0; text-transform: none;
+    }
+    .step-badge.green { background: var(--green); }
+
     .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
     .btn {
       flex: 1; min-width: 120px; padding: 10px 14px;
       font-size: 0.87rem; font-weight: 600; cursor: pointer;
       background: var(--dark); color: white; border: none;
-      border-radius: var(--r); transition: background 0.2s;
+      border-radius: var(--r); transition: background 0.2s, opacity 0.2s;
     }
-    .btn:hover { background: var(--mid); }
-    .btn.sec { background: white; color: var(--dark); border: 2px solid var(--dark); }
+    .btn:hover  { background: var(--mid); }
+    .btn.sec    { background: white; color: var(--dark); border: 2px solid var(--dark); }
     .btn.sec:hover { background: var(--light); }
-    .btn.del { background: var(--red); }
+    .btn.del    { background: var(--red); }
     .btn.del:hover { background: #c0001a; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:disabled  { opacity: 0.38; cursor: not-allowed; }
 
-    /* Client selector tabs */
     .tab-group {
       display: flex; border: 2px solid var(--dark);
-      border-radius: var(--r); overflow: hidden; margin-bottom: 14px;
+      border-radius: var(--r); overflow: hidden; margin-bottom: 12px;
     }
     .tab {
       flex: 1; padding: 9px 14px; font-size: 0.82rem; font-weight: 600;
       cursor: pointer; background: white; color: var(--dark);
       border: none; transition: background 0.15s, color 0.15s;
-      letter-spacing: 0.5px;
     }
     .tab.active { background: var(--dark); color: white; }
     .tab:not(.active):hover { background: var(--light); }
 
-    /* Client info */
     .client-info {
-      font-size: 0.83rem; color: var(--muted);
-      line-height: 1.55; margin-bottom: 14px;
+      font-size: 0.82rem; color: var(--muted);
+      line-height: 1.6; margin-bottom: 14px;
     }
     .scope-tag {
-      display: inline-block; font-size: 0.72rem; font-weight: 600;
+      display: inline-block; font-size: 0.7rem; font-weight: 700;
       padding: 2px 8px; border-radius: 20px; margin: 2px;
       background: var(--dark); color: white;
     }
     .scope-tag.extra { background: var(--mid); }
 
-    /* Flow steps */
-    .steps { display: flex; flex-direction: column; gap: 8px; }
-    .step {
-      display: flex; align-items: center; gap: 12px;
-      padding: 9px 12px; border-radius: 8px;
-      font-size: 0.83rem; transition: background 0.2s;
-      border: 1.5px solid transparent;
-    }
-    .step .dot {
-      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; font-weight: 700;
-      border: 2px solid #d1d5db; color: #9ca3af;
-      transition: all 0.2s;
-    }
-    .step.done { background: #f0fdf4; border-color: #bbf7d0; }
-    .step.done .dot { border-color: #16a34a; color: #16a34a; background: #dcfce7; }
-    .step.active { background: #eff6ff; border-color: #bfdbfe; }
-    .step.active .dot { border-color: var(--mid); color: var(--mid); background: var(--light); }
-
-    /* Status bar */
     #status {
-      width: 100%; max-width: 540px; padding: 10px 14px;
+      width: 100%; max-width: 560px; padding: 10px 14px;
       border-radius: var(--r); font-size: 0.84rem; font-weight: 500;
-      margin-bottom: 16px; display: none; line-height: 1.5;
+      margin-bottom: 14px; display: none; line-height: 1.5;
     }
-    #status.info    { background:#dbeafe; color:#1e40af; display:block; }
-    #status.success { background:#dcfce7; color:#166534; display:block; }
-    #status.error   { background:#fee2e2; color:#991b1b; display:block; }
+    #status.info    { background: #dbeafe; color: #1e40af; display: block; }
+    #status.success { background: #dcfce7; color: #166534; display: block; }
+    #status.error   { background: #fee2e2; color: #991b1b; display: block; }
+    #status.amber   { background: #fef3c7; color: #92400e; display: block; }
 
-    /* Code/token display */
+    /* ── Flow steps ── */
+    .flow-steps { display: flex; flex-direction: column; gap: 6px; }
+    .flow-step {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 9px 11px; border-radius: 8px; font-size: 0.81rem;
+      border: 1.5px solid transparent; transition: background 0.2s, border-color 0.2s;
+    }
+    .flow-step .dot {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 700;
+      border: 2px solid #d1d5db; color: #9ca3af; transition: all 0.2s;
+    }
+    .flow-step .step-title  { font-weight: 600; color: var(--text); line-height: 1.4; }
+    .flow-step .step-detail { font-size: 0.74rem; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+
+    .flow-step.active   { background: #eff6ff; border-color: #bfdbfe; }
+    .flow-step.active .dot { border-color: var(--mid); color: var(--mid); background: var(--light); }
+    .flow-step.done     { background: #f0fdf4; border-color: #bbf7d0; }
+    .flow-step.done .dot { border-color: var(--green); color: var(--green); background: #dcfce7; }
+
+    /* CDC-specific step gets amber treatment */
+    .flow-step.cdc-step.active  { background: #fef3c7; border-color: #fcd34d; }
+    .flow-step.cdc-step.active .dot { border-color: var(--amber); color: var(--amber); background: #fffbeb; }
+    .flow-step.cdc-step.done    { background: #fefce8; border-color: #fde68a; }
+    .flow-step.cdc-step.done .dot { border-color: var(--amber); color: var(--amber); background: #fef3c7; }
+
+    .cdc-badge {
+      display: inline-block; font-size: 0.62rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 20px; margin-left: 6px;
+      background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+      vertical-align: middle;
+    }
+    .wso2-badge {
+      display: inline-block; font-size: 0.62rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 20px; margin-left: 4px;
+      background: #dcfce7; color: #14532d; border: 1px solid #86efac;
+      vertical-align: middle;
+    }
+
     .mono-box {
       background: #1e293b; color: #a8ff78;
-      font-family: 'Courier New', monospace; font-size: 0.72rem;
-      padding: 12px; border-radius: 8px;
-      word-break: break-all; white-space: pre-wrap;
-      max-height: 160px; overflow-y: auto; margin-top: 10px;
-      display: none;
+      font-family: 'Courier New', monospace; font-size: 0.71rem;
+      padding: 12px; border-radius: 8px; word-break: break-all;
+      white-space: pre-wrap; max-height: 180px; overflow-y: auto;
+      margin-top: 10px; line-height: 1.6;
     }
-    .mono-box.visible { display: block; }
-    .mono-box .dim { color: #4b5563; }
-    .mono-box .label { color: #fbbf24; }
 
-    #screen-container { width: 100%; max-width: 540px; }
-    footer { margin-top: 32px; color: var(--muted); font-size: 0.72rem; text-align: center; }
+    #screen-container { width: 100%; max-width: 560px; }
+    footer { margin-top: 32px; color: var(--muted); font-size: 0.71rem; text-align: center; line-height: 1.8; }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>🔐 SPAR POC</h1>
-  <p>Passkey · OIDC Authorization Code + PKCE · Scoped Claims</p>
+  <h1>&#x1F510; SPAR CIAM POC</h1>
+  <p>Authorization Code + PKCE &nbsp;&middot;&nbsp; SAP Customer Data Cloud &nbsp;&middot;&nbsp; Confidential Backend Client</p>
 </header>
 
 <div id="status"></div>
 
-<!-- ── Step 1: Login ─────────────────────────────────── -->
+<!-- Step 1 -->
 <div class="card">
-  <h2>Step 1 · Authenticate via Screen-Set</h2>
+  <h2><span class="step-badge">Step 1</span> Authenticate</h2>
   <div class="btn-group">
-    <button class="btn"     onclick="showPasskeyRegister()">Register Passkey</button>
-    <button class="btn sec" onclick="showStandardLogin()">Login</button>
+    <button class="btn"     onclick="showLogin()">Login</button>
+    <button class="btn sec" onclick="showPasskeyRegister()">Register Passkey</button>
     <button class="btn del" onclick="doLogout()">Logout</button>
   </div>
 </div>
 
-<!-- ── Step 2: Client + OIDC flow ──────────────────── -->
+<!-- Steps 2–9 -->
 <div class="card">
-  <h2>Step 2 · OIDC Client &amp; Flow</h2>
-
+  <h2><span class="step-badge">Steps 2&ndash;9</span> OIDC Client &amp; Flow</h2>
   <div class="tab-group">
-    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A — Basic</button>
-    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B — Identity</button>
+    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A &mdash; Basic</button>
+    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B &mdash; Identity</button>
   </div>
-
   <div class="client-info" id="clientInfo">
-    Scopes: <span class="scope-tag">openid</span>
-    &nbsp;· /basic ✓ &nbsp;· /identity ✗
+    <span class="scope-tag">openid</span>
+    &nbsp;&middot;&nbsp; <code>/basic</code> &#10003; &nbsp;&middot;&nbsp; <code>/identity</code> &#10007; (403)
   </div>
-
   <div class="btn-group">
-    <button class="btn" id="btnStartFlow" onclick="startOidcFlow()" disabled>
-      ▶ Start OIDC Flow
-    </button>
+    <button class="btn" id="btnStartFlow" onclick="startFlow()" disabled>&#9654; Start OIDC Flow</button>
     <button class="btn sec" onclick="checkSession()">Check Session</button>
   </div>
 </div>
 
-<!-- ── Flow tracker ───────────────────────────────── -->
+<!-- Flow tracker -->
 <div class="card">
   <h2>Flow Progress</h2>
-  <div class="steps">
-    <div class="step active" id="s1">
+  <div class="flow-steps">
+
+    <div class="flow-step active" id="fs1">
       <div class="dot">1</div>
-      <span>SAP CDC Screen-Set login (Passkey / Password)</span>
+      <div>
+        <div class="step-title">CDC Screen-Set login</div>
+        <div class="step-detail">gigya.js renders login UI inside the page &mdash; password or passkey</div>
+      </div>
     </div>
-    <div class="step" id="s2">
+
+    <div class="flow-step" id="fs2">
       <div class="dot">2</div>
-      <span>Generate PKCE — <code>code_verifier</code> + S256 <code>code_challenge</code></span>
+      <div>
+        <div class="step-title">Generate PKCE</div>
+        <div class="step-detail"><code>code_verifier</code> (secret, stays in browser) + S256 <code>code_challenge</code> + <code>state</code></div>
+      </div>
     </div>
-    <div class="step" id="s3">
+
+    <div class="flow-step cdc-step" id="fs3">
       <div class="dot">3</div>
-      <span>Redirect browser → SAP CDC <code>/authorize</code></span>
+      <div>
+        <div class="step-title">
+          Fetch session proof
+          <span class="cdc-badge">CDC-SPECIFIC</span>
+          <span class="wso2-badge">WSO2: removed</span>
+        </div>
+        <div class="step-detail">
+          <code>gigya.accounts.getAccountInfo()</code> &rarr; <code>UID</code> + <code>UIDSignature</code> + <code>signatureTimestamp</code><br/>
+          Required because login session is on <code>cdns.eu1.gigya.com</code>, /authorize is on <code>fidm.eu1.gigya.com</code>
+        </div>
+      </div>
     </div>
-    <div class="step" id="s4">
+
+    <div class="flow-step" id="fs4">
       <div class="dot">4</div>
-      <span>CDC returns <code>?code=…</code> to this page</span>
+      <div>
+        <div class="step-title">Redirect to CDC /authorize</div>
+        <div class="step-detail"><code>code_challenge</code> + <code>state</code> + session proof &rarr; CDC validates and issues authorization code</div>
+      </div>
     </div>
-    <div class="step" id="s5">
+
+    <div class="flow-step" id="fs5">
       <div class="dot">5</div>
-      <span>POST <code>code + code_verifier</code> → Backend <code>/callback</code></span>
+      <div>
+        <div class="step-title">CDC returns <code>?code=</code></div>
+        <div class="step-detail">Browser lands back on this page with authorization code in URL</div>
+      </div>
     </div>
-    <div class="step" id="s6">
+
+    <div class="flow-step" id="fs6">
       <div class="dot">6</div>
-      <span>Backend validates JWT — session cookie set</span>
+      <div>
+        <div class="step-title">Validate state &rarr; POST to backend</div>
+        <div class="step-detail">CSRF check &mdash; SPA sends <code>{ code, code_verifier, client_id }</code> to <code>/oidc/callback</code></div>
+      </div>
     </div>
+
+    <div class="flow-step" id="fs7">
+      <div class="dot">7</div>
+      <div>
+        <div class="step-title">Backend &rarr; CDC /token exchange</div>
+        <div class="step-detail"><code>client_secret</code> used server-side only &mdash; never leaves the backend</div>
+      </div>
+    </div>
+
+    <div class="flow-step" id="fs8">
+      <div class="dot">8</div>
+      <div>
+        <div class="step-title">JWT validated &mdash; session cookie set</div>
+        <div class="step-detail">Issuer &middot; audience &middot; JWKS signature &middot; expiry &middot; scopes &mdash; <code>HttpOnly</code> cookie issued</div>
+      </div>
+    </div>
+
+    <div class="flow-step" id="fs9">
+      <div class="dot">9</div>
+      <div>
+        <div class="step-title">Protected endpoint calls</div>
+        <div class="step-detail">Cookie sent automatically &mdash; scope enforced server-side</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ── PKCE detail ─────────────────────────────────── -->
+<!-- PKCE detail -->
 <div class="card" id="pkceCard" style="display:none">
-  <h2>PKCE Parameters (browser-generated)</h2>
-  <div class="mono-box visible" id="pkceBox"></div>
+  <h2><span class="step-badge">Step 2</span> PKCE Parameters (generated in browser)</h2>
+  <div class="mono-box" id="pkceBox"></div>
 </div>
 
-<!-- ── Token response ─────────────────────────────── -->
+<!-- Session summary -->
 <div class="card" id="tokenCard" style="display:none">
-  <h2>Token Response (from Backend)</h2>
-  <div class="mono-box visible" id="tokenBox"></div>
+  <h2><span class="step-badge green">Steps 7&ndash;8</span> Backend Session Established</h2>
+  <div class="mono-box" id="tokenBox"></div>
   <div class="btn-group" style="margin-top:12px">
     <button class="btn sec" onclick="callEndpoint('basic')">GET /basic</button>
     <button class="btn sec" onclick="callEndpoint('identity')">GET /identity</button>
   </div>
 </div>
 
-<!-- ── Endpoint result ─────────────────────────────── -->
+<!-- Endpoint result -->
 <div class="card" id="endpointCard" style="display:none">
-  <h2>Endpoint Result</h2>
-  <div class="mono-box visible" id="endpointBox"></div>
+  <h2><span class="step-badge green">Step 9</span> Endpoint Result</h2>
+  <div class="mono-box" id="endpointBox"></div>
 </div>
 
-<!-- Screen-Set renders here -->
 <div id="screen-container"></div>
 
 <footer>
-  EU1 · API: 4_q7bWSrrfARGv_vP1knVRIg
-  &nbsp;·&nbsp; Client A: <span id="footerClientId">—</span>
+  EU1 &nbsp;&middot;&nbsp; API: 4_q7bWSrrfARGv_vP1knVRIg
+  &nbsp;&middot;&nbsp; Client: <span id="footerClient">A &mdash; P8KZKW6_rpayN8d0m2y-tUds</span>
+  <br/>Backend: https://localhost:7187 &nbsp;&middot;&nbsp; Flow: Authorization Code + PKCE (Confidential BFF)
 </footer>
 
-<!-- ═══════════════════════════════════════════════════════
-     CONFIGURATION — update before deploying
-     ═══════════════════════════════════════════════════════ -->
 <script>
-const CONFIG = {
-  // Your SAP CDC site API key (already set above in gigya.js src)
-  apiKey: '4_q7bWSrrfARGv_vP1knVRIg',
+'use strict';
 
-  // SAP CDC OIDC base — EU1 data centre
-  oidcBase: 'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg',
-
-  // Your .NET backend URL
+// ─────────────────────────────────────────────────────────────────────
+//  CONFIGURATION
+// ─────────────────────────────────────────────────────────────────────
+var CONFIG = {
+  apiKey:      '4_q7bWSrrfARGv_vP1knVRIg',
+  oidcBase:    'https://fidm.eu1.gigya.com/oidc/op/v1.0/4_q7bWSrrfARGv_vP1knVRIg',
   backendBase: 'https://localhost:7187',
-
-  // redirect_uri registered in SAP CDC Admin Console → Security → OIDC → Relying Parties
-  // This MUST match exactly — no trailing slash differences
   redirectUri: 'https://kingcode-software.github.io/spar-poc/',
-
-  // Two OIDC Relying Party clients configured in SAP CDC Admin Console
   clients: {
     A: {
       clientId: 'P8KZKW6_rpayN8d0m2y-tUds',
       scopes:   'openid',
-      infoHtml: 'Scopes: <span class="scope-tag">openid</span> &nbsp;· /basic ✓ &nbsp;· /identity ✗'
+      infoHtml: '<span class="scope-tag">openid</span>&nbsp;&middot;&nbsp;<code>/basic</code> &#10003;&nbsp;&middot;&nbsp;<code>/identity</code> &#10007; (403)'
     },
     B: {
       clientId: 'U_XwKfuhT-wL5cbVQYZ47En0',
       scopes:   'openid basic_identity',
-      infoHtml: 'Scopes: <span class="scope-tag">openid</span> <span class="scope-tag extra">basic_identity</span> &nbsp;· /basic ✓ &nbsp;· /identity ✓'
+      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag extra">basic_identity</span>&nbsp;&middot;&nbsp;<code>/basic</code> &#10003;&nbsp;&middot;&nbsp;<code>/identity</code> &#10003;'
     }
   }
 };
 
-// ── State ─────────────────────────────────────────────────────────
-let currentClient = 'A';
-let sdkReady      = false;
+var currentClient = 'A';
 
-// ── Utility ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  UI HELPERS
+// ─────────────────────────────────────────────────────────────────────
 function setStatus(msg, type) {
-  const el = document.getElementById('status');
+  var el = document.getElementById('status');
   el.innerHTML = msg;
   el.className = type;
 }
 
-function setStep(n, done) {
-  for (let i = 1; i <= 6; i++) {
-    const el = document.getElementById('s' + i);
-    if (!el) continue;
-    if (i < n || (i === n && done)) {
-      el.className = 'step done';
-    } else if (i === n && !done) {
-      el.className = 'step active';
-    } else {
-      el.className = 'step';
-    }
+function setStep(n, state) {
+  var el = document.getElementById('fs' + n);
+  if (!el) return;
+  var isCdc = el.classList.contains('cdc-step');
+  el.className = 'flow-step' + (isCdc ? ' cdc-step' : '') + (state ? ' ' + state : '');
+}
+
+function advanceTo(n) {
+  for (var i = 1; i <= 9; i++) {
+    if      (i < n)  setStep(i, 'done');
+    else if (i === n) setStep(i, 'active');
+    else              setStep(i, '');
   }
 }
 
-// ── PKCE ─────────────────────────────────────────────────────────
-async function generatePKCE() {
-  const arr = new Uint8Array(48);
-  crypto.getRandomValues(arr);
-  const verifier = btoa(String.fromCharCode(...arr))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-
-  const digest = await crypto.subtle.digest(
-    'SHA-256', new TextEncoder().encode(verifier)
-  );
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-
-  const stateArr = new Uint8Array(16);
-  crypto.getRandomValues(stateArr);
-  const state = btoa(String.fromCharCode(...stateArr))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-
-  return { verifier, challenge, state };
+function resetOutputCards() {
+  document.getElementById('pkceCard').style.display     = 'none';
+  document.getElementById('tokenCard').style.display    = 'none';
+  document.getElementById('endpointCard').style.display = 'none';
 }
 
-// ── Client selector ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  PKCE GENERATION (Step 2)
+// ─────────────────────────────────────────────────────────────────────
+async function generatePKCE() {
+  var arr = new Uint8Array(48);
+  crypto.getRandomValues(arr);
+  var verifier = btoa(String.fromCharCode.apply(null, arr))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  var digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  var challenge = btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  var stateArr = new Uint8Array(16);
+  crypto.getRandomValues(stateArr);
+  var state = btoa(String.fromCharCode.apply(null, stateArr))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+  return { verifier: verifier, challenge: challenge, state: state };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  CLIENT SELECTOR
+// ─────────────────────────────────────────────────────────────────────
 function selectClient(key) {
   currentClient = key;
   document.getElementById('tabA').className = 'tab' + (key === 'A' ? ' active' : '');
   document.getElementById('tabB').className = 'tab' + (key === 'B' ? ' active' : '');
   document.getElementById('clientInfo').innerHTML = CONFIG.clients[key].infoHtml;
-  document.getElementById('footerClientId').textContent = CONFIG.clients[key].clientId;
-
-  // Reset output panels
-  document.getElementById('pkceCard').style.display    = 'none';
-  document.getElementById('tokenCard').style.display   = 'none';
-  document.getElementById('endpointCard').style.display = 'none';
-  setStep(1);
+  document.getElementById('footerClient').textContent = key + ' \u2014 ' + CONFIG.clients[key].clientId;
+  resetOutputCards();
+  advanceTo(1);
 }
 
-// ── SDK ready ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  SDK READY — check for callback or existing session
+// ─────────────────────────────────────────────────────────────────────
 window.onGigyaServiceReady = function() {
-  sdkReady = true;
+  console.log('[CDC] SDK ready');
 
-  // Check for ?code= in URL — returning from SAP CDC /authorize
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('code')) {
+  var params = new URLSearchParams(window.location.search);
+  if (params.has('code') || params.has('error')) {
     handleCallback(params);
     return;
   }
 
-  // Check for existing CDC session
   gigya.accounts.getAccountInfo({
     callback: function(res) {
-      if (res.errorCode === 0) {
-        onSessionActive(res);
-      }
-      // No session → user sees the Login card and screen-set buttons
+      if (res.errorCode === 0) onSessionReady(res);
     }
   });
-
-  document.getElementById('footerClientId').textContent = CONFIG.clients['A'].clientId;
 };
 
-function onSessionActive(res) {
-  const email = (res.profile && res.profile.email) || res.UID;
-  setStatus('✅ Logged in — <b>' + email + '</b>', 'success');
+function onSessionReady(res) {
+  var email = (res.profile && res.profile.email) || res.UID;
+  setStatus('&#10003; Logged in &mdash; <b>' + email + '</b>', 'success');
   document.getElementById('btnStartFlow').disabled = false;
-  setStep(1, true);
-  setStep(2);
+  setStep(1, 'done');
+  setStep(2, 'active');
 }
 
-// ── OIDC Flow ─────────────────────────────────────────────────────
-function startOidcFlow() {
-  setStatus('🔄 Fetching session proof from CDC…', 'info');
+// ─────────────────────────────────────────────────────────────────────
+//  MAIN FLOW — Steps 2, 3, 4
+// ─────────────────────────────────────────────────────────────────────
+function startFlow() {
+  document.getElementById('btnStartFlow').disabled = true;
+  resetOutputCards();
 
-  gigya.accounts.getAccountInfo({
-    callback: async function(res) {
+  // Step 2 — Generate PKCE
+  advanceTo(2);
+  setStatus('&#x1F504; Step 2 &mdash; Generating PKCE&hellip;', 'info');
 
-      if (res.errorCode !== 0) {
-        setStatus('❌ No active CDC session (code ' + res.errorCode + ') — please log in first.', 'error');
-        setStep(1);
-        return;
+  generatePKCE().then(function(pkce) {
+
+    document.getElementById('pkceCard').style.display = 'block';
+    document.getElementById('pkceBox').textContent =
+      'code_verifier         : ' + pkce.verifier  + '\n' +
+      'code_challenge        : ' + pkce.challenge + '\n' +
+      'code_challenge_method : S256\n' +
+      'state                 : ' + pkce.state;
+
+    // Persist for when CDC redirects back with ?code=
+    sessionStorage.setItem('pkce_verifier',  pkce.verifier);
+    sessionStorage.setItem('pkce_state',     pkce.state);
+    sessionStorage.setItem('oidc_client',    currentClient);
+    sessionStorage.setItem('oidc_client_id', CONFIG.clients[currentClient].clientId);
+
+    console.log('[PKCE] Generated. verifier stored in sessionStorage only.');
+
+    // ─────────────────────────────────────────────────────────────
+    //  Step 3 — CDC-specific domain bridge
+    //
+    //  WHY THIS EXISTS:
+    //    gigya.js sets the session cookie on  cdns.eu1.gigya.com
+    //    CDC /authorize lives on              fidm.eu1.gigya.com
+    //    Browsers block cross-domain cookies — CDC sees no session.
+    //    Fix: get a server-signed session proof and pass it as URL
+    //    parameters. CDC validates the signature server-side.
+    //
+    //  WSO2 FUTURE STATE:
+    //    Login and /authorize share the same domain.
+    //    This step is removed entirely. Steps 4-9 are unchanged.
+    // ─────────────────────────────────────────────────────────────
+    advanceTo(3);
+    setStatus('&#x26A0;&#xFE0F; Step 3 &mdash; Fetching CDC session proof (CDC-specific bridge)&hellip;', 'amber');
+
+    gigya.accounts.getAccountInfo({
+      callback: function(res) {
+
+        if (res.errorCode !== 0) {
+          setStatus('&#10060; No active CDC session (code ' + res.errorCode + ') &mdash; please log in first.', 'error');
+          advanceTo(1);
+          document.getElementById('btnStartFlow').disabled = false;
+          return;
+        }
+
+        var uid       = res.UID;
+        var sig       = res.UIDSignature;
+        var timestamp = res.signatureTimestamp;
+
+        if (!uid || !sig || !timestamp) {
+          setStatus('&#10060; Session proof incomplete &mdash; missing UID, UIDSignature or signatureTimestamp', 'error');
+          console.error('[CDC] getAccountInfo incomplete:', res);
+          document.getElementById('btnStartFlow').disabled = false;
+          return;
+        }
+
+        console.log('[CDC] Session proof obtained. UID:', uid);
+        setStep(3, 'done');
+
+        // ─────────────────────────────────────────────────────────
+        //  Step 4 — Redirect to CDC /authorize
+        // ─────────────────────────────────────────────────────────
+        advanceTo(4);
+        setStatus('&#x1F504; Step 4 &mdash; Redirecting to CDC /authorize&hellip;', 'info');
+
+        var c = CONFIG.clients[currentClient];
+        var authParams = new URLSearchParams({
+          response_type:         'code',
+          client_id:             c.clientId,
+          redirect_uri:          CONFIG.redirectUri,
+          scope:                 c.scopes,
+          state:                 pkce.state,
+          code_challenge:        pkce.challenge,
+          code_challenge_method: 'S256',
+          // CDC session proof (step 3) — not needed in WSO2
+          UID:                   uid,
+          UIDSignature:          sig,
+          signatureTimestamp:    timestamp
+        });
+
+        console.log('[OIDC] Navigating to /authorize');
+        window.location.href = CONFIG.oidcBase + '/authorize?' + authParams.toString();
       }
-
-      const uid       = res.UID;
-      const sig       = res.UIDSignature;
-      const timestamp = res.signatureTimestamp;
-
-      if (!uid || !sig || !timestamp) {
-        setStatus('❌ Session proof incomplete — missing UID, UIDSignature or signatureTimestamp', 'error');
-        console.error('[OIDC] Incomplete getAccountInfo response:', res);
-        return;
-      }
-
-      console.log('[OIDC] Session proof obtained. UID:', uid);
-
-      const c = CONFIG.clients[currentClient];
-
-      setStatus('🔄 Generating PKCE parameters…', 'info');
-      setStep(2);
-
-      const pkce = await generatePKCE();
-
-      sessionStorage.setItem('pkce_verifier',  pkce.verifier);
-      sessionStorage.setItem('pkce_state',     pkce.state);
-      sessionStorage.setItem('oidc_client',    currentClient);
-      sessionStorage.setItem('oidc_client_id', c.clientId);
-
-      document.getElementById('pkceCard').style.display = 'block';
-      document.getElementById('pkceBox').textContent =
-        'code_verifier         : ' + pkce.verifier + '\n' +
-        'code_challenge        : ' + pkce.challenge + '\n' +
-        'code_challenge_method : S256\n' +
-        'state                 : ' + pkce.state;
-
-      setStep(2, true);
-      setStep(3);
-      setStatus('🔄 Redirecting to SAP CDC /authorize with session proof…', 'info');
-
-      const params = new URLSearchParams({
-        response_type:         'code',
-        client_id:             c.clientId,
-        redirect_uri:          CONFIG.redirectUri,
-        scope:                 c.scopes,
-        state:                 pkce.state,
-        code_challenge:        pkce.challenge,
-        code_challenge_method: 'S256',
-        UID:                   uid,
-        UIDSignature:          sig,
-        signatureTimestamp:    timestamp
-      });
-
-      const authUrl = CONFIG.oidcBase + '/authorize?' + params.toString();
-      console.log('[OIDC] Redirecting to /authorize with session proof');
-      window.location.href = authUrl;
-    }
+    });
   });
 }
 
-// ── Callback handler — runs when ?code= is present on page load ───
+// ─────────────────────────────────────────────────────────────────────
+//  CALLBACK HANDLER — Steps 5, 6 (7+8 on backend), 9 unlocked
+//  Runs on page load when CDC redirects back with ?code=
+// ─────────────────────────────────────────────────────────────────────
 async function handleCallback(params) {
-  const code          = params.get('code');
-  const returnedState = params.get('state');
+  var code          = params.get('code');
+  var returnedState = params.get('state');
+  var errorParam    = params.get('error');
 
   // Clean URL immediately
   window.history.replaceState({}, document.title, window.location.pathname);
 
-  // Restore PKCE values saved before the redirect
-  const savedState    = sessionStorage.getItem('pkce_state');
-  const savedVerifier = sessionStorage.getItem('pkce_verifier');
-  const savedClient   = sessionStorage.getItem('oidc_client')    || 'A';
-  const savedClientId = sessionStorage.getItem('oidc_client_id') || CONFIG.clients['A'].clientId;
+  // CDC returned an error (e.g. scope not allowed for this client)
+  if (errorParam) {
+    setStatus('&#10060; CDC authorization error: <b>' + errorParam + '</b>' +
+      (params.get('error_description') ? ' &mdash; ' + params.get('error_description') : ''), 'error');
+    return;
+  }
+
+  // Restore values persisted before the redirect
+  var savedState    = sessionStorage.getItem('pkce_state');
+  var savedVerifier = sessionStorage.getItem('pkce_verifier');
+  var savedClient   = sessionStorage.getItem('oidc_client')    || 'A';
+  var savedClientId = sessionStorage.getItem('oidc_client_id') || CONFIG.clients['A'].clientId;
 
   sessionStorage.removeItem('pkce_state');
   sessionStorage.removeItem('pkce_verifier');
   sessionStorage.removeItem('oidc_client');
   sessionStorage.removeItem('oidc_client_id');
 
-  // Restore client selector to match what was used
   selectClient(savedClient);
-  setStep(4, true);
-  setStep(5);
 
-  // State validation — prevents CSRF
+  // Step 5 — Code received
+  advanceTo(5);
+  setStatus('&#x1F504; Step 5 &mdash; Authorization code received. Validating state&hellip;', 'info');
+
+  // State validation — CSRF protection
   if (returnedState !== savedState) {
-    setStatus('❌ State mismatch — request rejected (possible CSRF)', 'error');
-    setStep(4);
+    setStatus('&#10060; State mismatch &mdash; request rejected (CSRF protection). ' +
+      'Expected: <code>' + savedState + '</code>', 'error');
+    console.error('[OIDC] State mismatch:', { expected: savedState, got: returnedState });
     return;
   }
 
-  setStatus('🔄 <b>Step 4 ✓</b> — Authorization code received. Sending to backend…', 'info');
+  console.log('[OIDC] State valid. Posting code to backend.');
 
-  // POST to backend /callback — backend holds client_secret, exchanges code, validates JWT
+  // Step 6 — POST to backend /oidc/callback
+  advanceTo(6);
+  setStatus('&#x1F504; Step 6 &mdash; Sending code to backend /oidc/callback&hellip;', 'info');
+
   try {
-    const res = await fetch(CONFIG.backendBase + '/oidc/callback', {
+    var res = await fetch(CONFIG.backendBase + '/oidc/callback', {
       method:      'POST',
       headers:     { 'Content-Type': 'application/json' },
-      credentials: 'include',           // send/receive HttpOnly session cookie
+      credentials: 'include',  // required — lets backend set the HttpOnly cookie
       body: JSON.stringify({
-        code:          code,
-        code_verifier: savedVerifier,
-        client_id:     savedClientId,
-        redirect_uri:  CONFIG.redirectUri
+        code:         code,
+        codeVerifier: savedVerifier,
+        clientId:     savedClientId,
+        redirectUri:  CONFIG.redirectUri
       })
     });
 
-    const data = await res.json();
+    var data = await res.json();
 
     if (!res.ok) {
-      setStatus('❌ Backend error: ' + (data.error || res.statusText), 'error');
+      setStatus('&#10060; Backend error: <b>' + (data.error || res.statusText) + '</b>' +
+        (data.detail ? '<br/><small>' + data.detail + '</small>' : ''), 'error');
+      console.error('[OIDC] Backend /oidc/callback error:', data);
       return;
     }
 
-    setStep(5, true);
-    setStep(6, true);
-    setStatus('✅ OIDC flow complete — session established', 'success');
+    // Steps 7 + 8 happened on the backend — mark them done
+    setStep(6, 'done');
+    setStep(7, 'done');
+    setStep(8, 'done');
+    setStep(9, 'active');
+
+    setStatus('&#10003; OIDC flow complete &mdash; session established', 'success');
     document.getElementById('btnStartFlow').disabled = false;
 
-    // Display token response
     document.getElementById('tokenCard').style.display = 'block';
     document.getElementById('tokenBox').textContent =
-      'sub      : ' + (data.sub    || '—') + '\n' +
-      'email    : ' + (data.email  || '—') + '\n' +
-      'scopes   : ' + (Array.isArray(data.scopes) ? data.scopes.join(' ') : '—') + '\n' +
-      '\n' +
-      '// client_secret was used server-side only — never sent to browser';
+      '// Backend validated JWT and set HttpOnly session cookie\n' +
+      '// access_token stays on server — never sent to browser\n\n' +
+      'sub    : ' + (data.sub   || '\u2014') + '\n' +
+      'email  : ' + (data.email || '\u2014') + '\n' +
+      'scopes : ' + (Array.isArray(data.scopes) ? data.scopes.join(' ') : '\u2014');
+
+    console.log('[OIDC] Flow complete:', data);
 
   } catch (err) {
-    setStatus('❌ Could not reach backend: ' + err.message +
-      '<br><small>Is the .NET API running at ' + CONFIG.backendBase + ' ?</small>', 'error');
+    setStatus(
+      '&#10060; Cannot reach backend: ' + err.message +
+      '<br/><small>Is the .NET API running at ' + CONFIG.backendBase + '?</small>',
+      'error'
+    );
+    console.error('[OIDC] Fetch error:', err);
   }
 }
 
-// ── Endpoint test ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  STEP 9 — Protected endpoint calls
+// ─────────────────────────────────────────────────────────────────────
 async function callEndpoint(ep) {
-  const card = document.getElementById('endpointCard');
-  const box  = document.getElementById('endpointBox');
+  setStep(9, 'active');
+  var card = document.getElementById('endpointCard');
+  var box  = document.getElementById('endpointBox');
   card.style.display = 'block';
-  box.textContent    = '// calling /' + ep + '…';
+  box.textContent    = '// GET /' + ep + '\u2026';
 
   try {
-    const res  = await fetch(CONFIG.backendBase + '/' + ep, {
-      credentials: 'include'
-    });
-    const data = await res.json();
+    var res  = await fetch(CONFIG.backendBase + '/' + ep, { credentials: 'include' });
+    var data = await res.json();
+
     box.textContent =
-      'GET /' + ep + ' → ' + res.status + '\n\n' +
-      JSON.stringify(data, null, 2);
+      'GET /' + ep + ' \u2192 ' + res.status + (res.ok ? ' OK' : ' ' + (data.error || '')) +
+      '\n\n' + JSON.stringify(data, null, 2);
+
+    if (res.ok) setStep(9, 'done');
+
   } catch (err) {
-    box.textContent = 'GET /' + ep + ' → error\n' + err.message;
+    box.textContent = 'GET /' + ep + ' \u2192 error\n' + err.message;
   }
 }
 
-// ── Screen-Set helpers ────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+//  SCREEN-SET HELPERS
+// ─────────────────────────────────────────────────────────────────────
+function showLogin() {
+  gigya.accounts.showScreenSet({
+    screenSet:   'Default-RegistrationLogin',
+    startScreen: 'gigya-login-screen',
+    containerID: 'screen-container',
+    onLogin: function(e) {
+      document.getElementById('screen-container').innerHTML = '';
+      onSessionReady(e);
+    },
+    onError: function(e) { setStatus('&#10060; ' + (e.errorMessage || 'Login error'), 'error'); }
+  });
+}
+
 function showPasskeyRegister() {
   gigya.accounts.showScreenSet({
     screenSet:   'Default-RegistrationLogin',
@@ -522,38 +683,20 @@ function showPasskeyRegister() {
     containerID: 'screen-container',
     onAfterSubmit: function(e) {
       if (e.response && e.response.errorCode === 0)
-        setStatus('✅ Passkey registered!', 'success');
+        setStatus('&#10003; Passkey registered successfully', 'success');
     },
-    onError: function(e) {
-      setStatus('❌ ' + (e.errorMessage || 'Passkey registration error'), 'error');
-    }
+    onError: function(e) { setStatus('&#10060; ' + (e.errorMessage || 'Passkey error'), 'error'); }
   });
 }
 
-function showStandardLogin() {
-  gigya.accounts.showScreenSet({
-    screenSet:   'Default-RegistrationLogin',
-    startScreen: 'gigya-login-screen',
-    containerID: 'screen-container',
-    onLogin: function(e) {
-      document.getElementById('screen-container').innerHTML = '';
-      onSessionActive(e);
-    },
-    onError: function(e) {
-      setStatus('❌ ' + (e.errorMessage || 'Login error'), 'error');
-    }
-  });
-}
-
-// ── Session / Logout ──────────────────────────────────────────────
 function checkSession() {
   gigya.accounts.getAccountInfo({
     callback: function(res) {
       if (res.errorCode === 0)
-        setStatus('✅ Active session — UID: <b>' + res.UID + '</b>' +
-          (res.profile && res.profile.email ? ' | ' + res.profile.email : ''), 'success');
+        setStatus('&#10003; Active CDC session &mdash; UID: <b>' + res.UID + '</b>' +
+          (res.profile && res.profile.email ? ' &middot; ' + res.profile.email : ''), 'success');
       else
-        setStatus('⚠️ No active session (code ' + res.errorCode + ')', 'error');
+        setStatus('&#9888; No active session (errorCode: ' + res.errorCode + ')', 'error');
     }
   });
 }
@@ -561,16 +704,17 @@ function checkSession() {
 function doLogout() {
   gigya.accounts.logout({
     callback: function() {
-      setStatus('👋 Logged out', 'info');
-      document.getElementById('screen-container').innerHTML   = '';
-      document.getElementById('pkceCard').style.display       = 'none';
-      document.getElementById('tokenCard').style.display      = 'none';
-      document.getElementById('endpointCard').style.display   = 'none';
-      document.getElementById('btnStartFlow').disabled        = true;
-      setStep(1);
+      setStatus('&#x1F44B; Logged out', 'info');
+      document.getElementById('screen-container').innerHTML = '';
+      document.getElementById('btnStartFlow').disabled      = true;
+      resetOutputCards();
+      advanceTo(1);
     }
   });
 }
+
+// Init
+advanceTo(1);
 </script>
 </body>
 </html>
