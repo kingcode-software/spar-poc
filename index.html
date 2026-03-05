@@ -19,7 +19,7 @@
   ║  Step 6  SPA validates state, POSTs code + verifier to backend   ║
   ║  Step 7  Backend exchanges code at CDC /token (secret server-side)║
   ║  Step 8  Backend validates JWT, sets HttpOnly session cookie     ║
-  ║  Step 9  SPA calls /basic and /identity — scope enforced         ║
+  ║  Step 9  SPA calls /oidc/openid and /oidc/basic_identity         ║
   ╚══════════════════════════════════════════════════════════════════╝
   -->
   <script src="https://cdns.eu1.gigya.com/JS/gigya.js?apiKey=4_q7bWSrrfARGv_vP1knVRIg"></script>
@@ -189,12 +189,12 @@
 <div class="card">
   <h2><span class="step-badge">Steps 2&ndash;9</span> OIDC Client &amp; Flow</h2>
   <div class="tab-group">
-    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A &mdash; Basic</button>
-    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B &mdash; Identity</button>
+    <button class="tab active" id="tabA" onclick="selectClient('A')">Client A &mdash; Normal</button>
+    <button class="tab"        id="tabB" onclick="selectClient('B')">Client B &mdash; Extra</button>
   </div>
   <div class="client-info" id="clientInfo">
-    <span class="scope-tag">openid</span>
-    &nbsp;&middot;&nbsp; <code>/basic</code> &#10003; &nbsp;&middot;&nbsp; <code>/identity</code> &#10007; (403)
+    <span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span>
+    &nbsp;&middot;&nbsp; <code>/oidc/openid</code> &#10003; &nbsp;&middot;&nbsp; <code>/oidc/basic_identity</code> &#10007; (403)
   </div>
   <div class="btn-group">
     <button class="btn" id="btnStartFlow" onclick="startFlow()" disabled>&#9654; Start OIDC Flow</button>
@@ -282,7 +282,7 @@
       <div class="dot">9</div>
       <div>
         <div class="step-title">Protected endpoint calls</div>
-        <div class="step-detail">Cookie sent automatically &mdash; scope enforced server-side</div>
+        <div class="step-detail">Cookie sent automatically &mdash; scope enforced server-side on <code>/oidc/openid</code> and <code>/oidc/basic_identity</code></div>
       </div>
     </div>
 
@@ -300,8 +300,8 @@
   <h2><span class="step-badge green">Steps 7&ndash;8</span> Backend Session Established</h2>
   <div class="mono-box" id="tokenBox"></div>
   <div class="btn-group" style="margin-top:12px">
-    <button class="btn sec" onclick="callEndpoint('basic')">GET /basic</button>
-    <button class="btn sec" onclick="callEndpoint('identity')">GET /identity</button>
+    <button class="btn sec" onclick="callEndpoint('oidc/openid')">GET /oidc/openid</button>
+    <button class="btn sec" onclick="callEndpoint('oidc/basic_identity')">GET /oidc/basic_identity</button>
   </div>
 </div>
 
@@ -315,7 +315,7 @@
 
 <footer>
   EU1 &nbsp;&middot;&nbsp; API: 4_q7bWSrrfARGv_vP1knVRIg
-  &nbsp;&middot;&nbsp; Client: <span id="footerClient">A &mdash; P8KZKW6_rpayN8d0m2y-tUds</span>
+  &nbsp;&middot;&nbsp;</span>
   <br/>Backend: https://localhost:7187 &nbsp;&middot;&nbsp; Flow: Authorization Code + PKCE (Confidential BFF)
 </footer>
 
@@ -334,12 +334,12 @@ var CONFIG = {
     A: {
       clientId: 'P8KZKW6_rpayN8d0m2y-tUds',
       scopes:   'openid profile email',
-      infoHtml: '<span class="scope-tag">openid</span>&nbsp;&middot;&nbsp;<code>/basic</code> &#10003;&nbsp;&middot;&nbsp;<code>/identity</code> &#10007; (403)'
+      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span>&nbsp;&middot;&nbsp;<code>/oidc/openid</code> &#10003;&nbsp;&middot;&nbsp;<code>/oidc/basic_identity</code> &#10007; (403)'
     },
     B: {
       clientId: 'U_XwKfuhT-wL5cbVQYZ47En0',
       scopes:   'openid profile email basic_identity',
-      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag extra">basic_identity</span>&nbsp;&middot;&nbsp;<code>/basic</code> &#10003;&nbsp;&middot;&nbsp;<code>/identity</code> &#10003;'
+      infoHtml: '<span class="scope-tag">openid</span> <span class="scope-tag">profile</span> <span class="scope-tag">email</span> <span class="scope-tag extra">basic_identity</span>&nbsp;&middot;&nbsp;<code>/oidc/openid</code>&#10003;&nbsp;&middot;&nbsp;<code>/oidc/basic_identity</code> &#10003;'
     }
   }
 };
@@ -692,11 +692,20 @@ function showPasskeyRegister() {
 function checkSession() {
   gigya.accounts.getAccountInfo({
     callback: function(res) {
-      if (res.errorCode === 0)
-        setStatus('&#10003; Active CDC session &mdash; UID: <b>' + res.UID + '</b>' +
-          (res.profile && res.profile.email ? ' &middot; ' + res.profile.email : ''), 'success');
-      else
-        setStatus('&#9888; No active session (errorCode: ' + res.errorCode + ')', 'error');
+      if (res.errorCode === 0) {
+        var email = (res.profile && res.profile.email) ? ' &middot; ' + res.profile.email : '';
+        setStatus('&#10003; Active CDC session &mdash; UID: <b>' + res.UID + '</b>' + email +
+          '<br/><small>Step 1 complete &mdash; you can start the OIDC flow</small>', 'success');
+        // Enable flow button — same as onSessionReady so user doesn't need to reload
+        document.getElementById('btnStartFlow').disabled = false;
+        setStep(1, 'done');
+        setStep(2, 'active');
+      } else {
+        setStatus('&#9888; No active CDC session &mdash; please log in first (errorCode: ' +
+          res.errorCode + ')', 'error');
+        document.getElementById('btnStartFlow').disabled = true;
+        advanceTo(1);
+      }
     }
   });
 }
