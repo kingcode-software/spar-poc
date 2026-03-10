@@ -183,6 +183,17 @@
     <button class="btn sec" onclick="showPasskeyRegister()">Register Passkey</button>
     <button class="btn del" onclick="doLogout()">Logout</button>
   </div>
+  <div style="margin-top:10px">
+    <a href="https://kingcode-software.github.io/spar-poc/spar-poc-shop/"
+       target="_blank"
+       style="display:inline-block;padding:9px 16px;font-size:0.85rem;font-weight:600;
+              background:#003366;color:white;border-radius:10px;text-decoration:none;
+              transition:background 0.2s;"
+       onmouseover="this.style.background='#0055aa'"
+       onmouseout="this.style.background='#003366'">
+      &#x1F6D2; Go to Site B (SSO Shop)
+    </a>
+  </div>
 </div>
 
 <!-- Steps 2–9 -->
@@ -197,7 +208,7 @@
     &nbsp;&middot;&nbsp; <code>/oidc/openid</code> &#10003; &nbsp;&middot;&nbsp; <code>/oidc/basic_identity</code> &#10007; (403)
   </div>
   <div class="btn-group">
-    <button class="btn" id="btnStartFlow" onclick="startFlow()" disabled>&#9654; Start OIDC Flow</button>
+    <button class="btn" id="btnStartFlow" onclick="startFlow()">&#9654; Start OIDC Flow</button>
     <button class="btn sec" onclick="checkSession()">Check Session</button>
   </div>
 </div>
@@ -720,7 +731,6 @@ function checkSession() {
       } else {
         setStatus('&#9888; No active CDC session &mdash; please log in first (errorCode: ' +
           res.errorCode + ')', 'error');
-        document.getElementById('btnStartFlow').disabled = true;
         advanceTo(1);
       }
     }
@@ -732,7 +742,6 @@ function doLogout() {
     callback: function() {
       setStatus('&#x1F44B; Logged out', 'info');
       document.getElementById('screen-container').innerHTML = '';
-      document.getElementById('btnStartFlow').disabled      = true;
       resetOutputCards();
       advanceTo(1);
     }
