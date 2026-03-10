@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPAR Online Shop — SSO POC (Site B)</title>
+
+  <!-- ── SAP CDC Web SDK — REPLACE API KEY ── -->
+  <script type="text/javascript"
+    src="https://cdns.eu1.gigya.com/js/gigya.js?apikey=SITE_B_API_KEY_HERE">
+  </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --spar-red:     #D0021B;
+      --spar-dark:    #8a0112;
+      --spar-light:   #fdf0f2;
+      --spar-yellow:  #FFD100;
+      --ink:          #1a1a1a;
+      --muted:        #6b7280;
+      --border:       #e5e7eb;
+      --surface:      #f9fafb;
+      --white:        #ffffff;
+      --radius:       10px;
+    }
+
+    body {
+      font-family: 'Barlow', sans-serif;
+      background: var(--surface);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* ── POC Banner ─────────────────────────────────── */
+    .poc-banner {
+      background: #1e3a5f;
+      color: #93c5fd;
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 16px;
+    }
+    .poc-banner span { color: var(--spar-yellow); }
+
+    /* ── Header ─────────────────────────────────────── */
+    header {
+      background: var(--spar-red);
+      box-shadow: 0 3px 12px rgba(0,0,0,0.2);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-inner {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .logo-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-mark {
+      width: 42px; height: 42px;
+      background: var(--white);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-mark svg { width: 30px; height: 30px; }
+    .logo-text .brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 1.35rem;
+      color: var(--white);
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .logo-text .sub {
+      font-size: 0.62rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.6);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .site-tag {
+      background: rgba(255,255,255,0.15);
+      color: var(--spar-yellow);
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,209,0,0.35);
+      white-space: nowrap;
+    }
+    .header-link {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 5px 10px;
+      border-radius: 6px;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    .header-link:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+    /* ── Page wrapper — single narrow column ─────────── */
+    .page-wrap {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* ── Section label ───────────────────────────────── */
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Card base ───────────────────────────────────── */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-header {
+      padding: 15px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-header h2 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.03em;
+      color: var(--ink);
+    }
+    .card-body { padding: 20px; }
+
+    /* ── Status dot ──────────────────────────────────── */
+    .status-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background .4s;
+    }
+    .status-dot.active  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+    .status-dot.loading { background: var(--spar-yellow); animation: pulse 1s infinite; }
+    .status-dot.error   { background: var(--spar-red); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── States ─────────────────────────────────────── */
+    .state { display: none; }
+    .state.visible { display: block; }
+
+    /* Loading */
+    .loading-state { text-align: center; padding: 18px 0; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--spar-red);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-state p { color: var(--muted); font-size: 0.85rem; }
+
+    /* Authenticated */
+    .welcome-row {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      margin-bottom: 16px;
+    }
+    .avatar {
+      width: 46px; height: 46px;
+      background: linear-gradient(135deg, var(--spar-red), #e8244e);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .welcome-text .greeting {
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+    }
+    .welcome-text .name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .sso-badge {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 12px 15px;
+      margin-bottom: 16px;
+    }
+    .sso-badge .icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .sso-badge .label { font-size: 0.8rem; font-weight: 700; color: #15803d; margin-bottom: 3px; }
+    .sso-badge .detail { font-size: 0.75rem; color: #166534; line-height: 1.5; }
+
+    .user-meta {
+      background: var(--surface);
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 13px;
+      font-size: 0.78rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .meta-row:last-child { border-bottom: none; }
+    .meta-row .key { color: var(--muted); font-weight: 500; }
+    .meta-row .val { font-weight: 600; font-family: monospace; font-size: 0.72rem; color: var(--ink); text-align: right; max-width: 60%; word-break: break-all; }
+    .meta-row .val.green { color: #15803d; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 8px 15px;
+      border-radius: 7px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .btn-red     { background: var(--spar-red); color: #fff; }
+    .btn-red:hover { background: var(--spar-dark); }
+    .btn-outline { background: transparent; color: var(--spar-red); border: 1.5px solid var(--spar-red); }
+    .btn-outline:hover { background: var(--spar-light); }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Unauthenticated */
+    .unauth-state { text-align: center; padding: 8px 0; }
+    .unauth-icon { font-size: 2.2rem; margin-bottom: 10px; }
+    .unauth-state h3 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 7px;
+    }
+    .unauth-state p { font-size: 0.82rem; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+    .redirect-hint {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 0.77rem;
+      color: #92400e;
+      text-align: left;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .redirect-hint strong { display: block; margin-bottom: 3px; }
+
+    /* ── Flow Explainer ──────────────────────────────── */
+    .flow-steps { display: flex; flex-direction: column; }
+    .flow-step {
+      display: flex;
+      gap: 13px;
+      align-items: flex-start;
+      position: relative;
+      padding-bottom: 15px;
+    }
+    .flow-step:last-child { padding-bottom: 0; }
+    .flow-step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 12px; top: 27px;
+      width: 2px;
+      height: calc(100% - 10px);
+      background: var(--border);
+    }
+    .step-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: var(--spar-red);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+    .step-num.done    { background: #22c55e; }
+    .step-num.current { background: var(--spar-yellow); color: var(--ink); box-shadow: 0 0 0 3px rgba(255,209,0,.25); }
+    .step-content .title { font-size: 0.82rem; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+    .step-content .desc  { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+    .step-content code   { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px; font-size: 0.68rem; color: var(--spar-dark); }
+
+    /* ── Diagnostic ──────────────────────────────────── */
+    .diagnostic {
+      border-top: 1px solid var(--border);
+      padding: 13px 20px 16px;
+    }
+    .diag-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .diag-label { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .diag-chevron { font-size: 0.75rem; color: var(--muted); transition: transform .2s; }
+    .diag-chevron.open { transform: rotate(180deg); }
+    #diagLog {
+      display: none;
+      margin-top: 9px;
+      background: #0f172a;
+      border-radius: 7px;
+      padding: 11px;
+      font-family: monospace;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      max-height: 160px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+    #diagLog.open { display: block; }
+    .log-line       { display: block; }
+    .log-line.ok    { color: #4ade80; }
+    .log-line.warn  { color: #fbbf24; }
+    .log-line.err   { color: #f87171; }
+    .log-line.info  { color: #93c5fd; }
+
+    /* ── Footer ─────────────────────────────────────── */
+    footer {
+      background: var(--spar-dark);
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      font-size: 0.7rem;
+      padding: 16px 24px;
+      line-height: 1.9;
+    }
+    footer strong { color: rgba(255,255,255,0.85); }
+
+    @media (max-width: 500px) {
+      .header-link { display: none; }
+      .page-wrap { padding: 22px 16px 48px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- POC Banner -->
+<div class="poc-banner">
+  ⚠️ &nbsp;<span>POC DEMONSTRATION ONLY</span> &nbsp;—&nbsp;
+  SAP CDC SSO · Site B · Not a real shop · Technical testing only &nbsp;⚠️
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-inner">
+    <div class="logo-block">
+      <div class="logo-mark">
+        <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 2L18 11H28L20 17L23 26L15 20L7 26L10 17L2 11H12L15 2Z" fill="#D0021B"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="brand">SPAR Online Shop</div>
+        <div class="sub">Groceries &amp; More</div>
+      </div>
+      <div class="site-tag">SSO POC — Site B</div>
+    </div>
+    <a href="https://kingcode-software.github.io/spar-poc/" class="header-link">← Site A (Login)</a>
+  </div>
+</header>
+
+<!-- Page -->
+<div class="page-wrap">
+
+  <!-- 1. SSO Status Card -->
+  <div>
+    <div class="section-label">SSO Session Status</div>
+    <div class="card">
+      <div class="card-header">
+        <div class="status-dot loading" id="statusDot"></div>
+        <h2 id="cardTitle">Checking SSO Session…</h2>
+      </div>
+      <div class="card-body">
+
+        <!-- Loading -->
+        <div class="state visible" id="stateLoading">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Contacting SAP CDC…<br/>Checking shared site group session.</p>
+          </div>
+        </div>
+
+        <!-- Authenticated -->
+        <div class="state" id="stateAuth">
+          <div class="welcome-row">
+            <div class="avatar" id="avatarInitials">?</div>
+            <div class="welcome-text">
+              <div class="greeting">Welcome back</div>
+              <div class="name" id="welcomeName">—</div>
+            </div>
+          </div>
+
+          <div class="sso-badge">
+            <div class="icon">✅</div>
+            <div>
+              <div class="label">SSO Session Active</div>
+              <div class="detail">
+                Authenticated on <strong>Site A</strong> — recognised silently on <strong>Site B</strong>
+                with no login prompt. Session shared via SAP CDC Site Group.
+              </div>
+            </div>
+          </div>
+
+          <div class="user-meta">
+            <div class="meta-row">
+              <span class="key">UID</span>
+              <span class="val" id="metaUid">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="key">Email</span>
+              <span class="val" id="metaEmail">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="key">Login Provider</span>
+              <span class="val green" id="metaProvider">site</span>
+            </div>
+            <div class="meta-row">
+              <span class="key">Session Origin</span>
+              <span class="val green">Site A → Site B</span>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <a href="https://kingcode-software.github.io/spar-poc/" class="btn btn-outline">← Back to Site A</a>
+            <button class="btn btn-red" onclick="doLogout()">Log Out</button>
+          </div>
+        </div>
+
+        <!-- Unauthenticated -->
+        <div class="state" id="stateUnauth">
+          <div class="unauth-state">
+            <div class="unauth-icon">🔒</div>
+            <h3>No Active Session Found</h3>
+            <p>SAP CDC returned no active session for this site group.<br/>Log in on Site A first to demonstrate SSO.</p>
+            <div class="redirect-hint">
+              <strong>👉 To test SSO:</strong>
+              Go to Site A, log in via the CDC Screen-Set, then return to this page — your session will be recognised automatically, with no login prompt.
+            </div>
+            <a href="https://kingcode-software.github.io/spar-poc/" class="btn btn-red">
+              Go to Site A → Log In
+            </a>
+          </div>
+        </div>
+
+      </div><!-- /card-body -->
+
+      <!-- Diagnostic -->
+      <div class="diagnostic">
+        <div class="diag-toggle" onclick="toggleDiag()">
+          <span class="diag-label">🔍 Diagnostic Log</span>
+          <span class="diag-chevron" id="diagChevron">▼</span>
+        </div>
+        <div id="diagLog"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. SSO Flow Explainer -->
+  <div>
+    <div class="section-label">How the SSO Flow Works</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="flow-steps">
+          <div class="flow-step">
+            <div class="step-num done" id="step1num">1</div>
+            <div class="step-content">
+              <div class="title">User logs in on Site A</div>
+              <div class="desc">CDC Screen-Set on <code>kingcode-software.github.io/spar-poc/</code> authenticates the user and sets a session cookie on <code>cdns.eu1.gigya.com</code>.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num" id="step2num">2</div>
+            <div class="step-content">
+              <div class="title">User navigates to Site B (this page)</div>
+              <div class="desc">No login prompt is shown. <code>gigya.js</code> loads with Site B's API key — both sites belong to the same CDC Site Group.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num" id="step3num">3</div>
+            <div class="step-content">
+              <div class="title">Site B silently checks the CDC session</div>
+              <div class="desc"><code>accounts.getAccountInfo()</code> is called on page load. CDC checks the shared group session cookie and returns the user's identity — no credential prompt.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num" id="step4num">4</div>
+            <div class="step-content">
+              <div class="title">SSO confirmed — user is recognised</div>
+              <div class="desc">Site B receives the UID, email and profile from CDC. The user is shown as authenticated. This demonstrates production-like cross-site SSO via the SAP CDC Site Group.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Architecture Notes -->
+  <div>
+    <div class="section-label">Architecture Notes</div>
+    <div class="card">
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:12px 14px;font-size:0.78rem;color:#92400e;line-height:1.6;">
+          <strong style="display:block;margin-bottom:4px;">⚠️ Third-Party Cookie Caveat (POC Limitation)</strong>
+          CDC cross-site SSO relies on a session cookie set on <code style="font-size:0.7rem;background:rgba(0,0,0,0.06);padding:1px 4px;border-radius:3px;">cdns.eu1.gigya.com</code>. Modern browsers (Safari ITP, Firefox ETP) may block this as a third-party cookie. In production this is mitigated via <strong>SAP CDC Certificate Provisioning + Custom API Domain</strong>, routing CDC calls through your own domain so the cookie is treated as first-party. This is analogous to how WSO2 removes the CDC domain-bridging step entirely.
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px 14px;font-size:0.78rem;color:var(--muted);line-height:1.6;">
+          <strong style="display:block;color:var(--ink);margin-bottom:4px;">🔵 OIDC Isolation</strong>
+          Site B has <strong>no OIDC clients registered</strong>. The OIDC Authorization Code + PKCE flow remains entirely on Site A. Site Group membership for SSO does not affect or interfere with the existing OIDC configuration.
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-wrap -->
+
+<!-- Footer -->
+<footer>
+  <strong>SPAR Online Shop — SSO POC (Site B)</strong><br/>
+  Technical proof-of-concept demonstrating SAP Customer Data Cloud cross-site Single Sign-On via Site Groups.<br/>
+  Not a real SPAR service · No real products · Built on SAP CDC Web SDK · OIDC POC Project · kingcode-software
+</footer>
+
+<script>
+/* ─────────────────────────────────────────────────────────
+   SAP CDC SSO POC — Site B
+   Silent session recognition via CDC Site Group
+───────────────────────────────────────────────────────── */
+
+function log(msg, type='info') {
+  const el = document.getElementById('diagLog');
+  if (!el) return;
+  const ts = new Date().toLocaleTimeString('en-ZA', { hour12: false });
+  const line = document.createElement('span');
+  line.className = 'log-line ' + type;
+  line.textContent = `[${ts}] ${msg}`;
+  el.appendChild(line);
+  el.appendChild(document.createTextNode('\n'));
+  el.scrollTop = el.scrollHeight;
+}
+
+function toggleDiag() {
+  document.getElementById('diagLog').classList.toggle('open');
+  document.getElementById('diagChevron').classList.toggle('open');
+}
+
+function setDot(state) {
+  document.getElementById('statusDot').className = 'status-dot ' + state;
+}
+
+function showState(which) {
+  ['stateLoading','stateAuth','stateUnauth'].forEach(id =>
+    document.getElementById(id).classList.remove('visible')
+  );
+  document.getElementById(which).classList.add('visible');
+}
+
+function setStepState(step, state) {
+  const el = document.getElementById('step' + step + 'num');
+  if (el) el.className = 'step-num ' + (state || '');
+}
+
+function checkSSOSession() {
+  log('Initialising Site B SSO check…', 'info');
+  log('Site Group: SSO Enabled — calling accounts.getAccountInfo()', 'info');
+  setStepState(2, 'current');
+  setStepState(3, 'current');
+
+  if (typeof gigya === 'undefined') {
+    log('ERROR: gigya.js failed to load. Check Site B API key and Trusted URLs.', 'err');
+    setDot('error');
+    document.getElementById('cardTitle').textContent = 'SDK Load Error';
+    showState('stateUnauth');
+    return;
+  }
+
+  log('gigya.js loaded ✓', 'ok');
+
+  gigya.accounts.getAccountInfo({
+    include: 'profile,data,loginProvider',
+    callback: function(res) {
+      if (res.errorCode === 0) {
+        handleAuthenticated(res);
+      } else {
+        handleUnauthenticated(res.errorCode, res.errorMessage);
+      }
+    }
+  });
+}
+
+function handleAuthenticated(res) {
+  log('CDC response received ✓', 'ok');
+  log(`SSO session confirmed — UID: ${res.UID}`, 'ok');
+  log('No login prompt shown — session shared via Site Group ✅', 'ok');
+
+  setDot('active');
+  document.getElementById('cardTitle').textContent = 'SSO Session Active';
+  showState('stateAuth');
+  setStepState(2, 'done');
+  setStepState(3, 'done');
+  setStepState(4, 'done');
+
+  const first    = res.profile?.firstName || '';
+  const last     = res.profile?.lastName  || '';
+  const email    = res.profile?.email     || res.UID;
+  const fullName = (first + ' ' + last).trim() || email;
+  const initials = ((first[0]||'') + (last[0]||'')).toUpperCase() || '?';
+
+  document.getElementById('welcomeName').textContent    = fullName;
+  document.getElementById('avatarInitials').textContent = initials;
+  document.getElementById('metaUid').textContent        = res.UID.slice(0,18) + '…';
+  document.getElementById('metaEmail').textContent      = email;
+  document.getElementById('metaProvider').textContent   = res.loginProvider || 'site';
+
+  log(`Profile: ${fullName} (${email})`, 'info');
+}
+
+function handleUnauthenticated(code, message) {
+  log(`No active session — errorCode: ${code}`, 'warn');
+  log('User must log in on Site A first', 'warn');
+  setDot('error');
+  document.getElementById('cardTitle').textContent = 'No Session Found';
+  showState('stateUnauth');
+  setStepState(2, 'current');
+}
+
+function doLogout() {
+  log('Logging out via accounts.logout()…', 'warn');
+  gigya.accounts.logout({
+    callback: function() {
+      log('Logout complete — session cleared across site group', 'ok');
+      setDot('error');
+      document.getElementById('cardTitle').textContent = 'Logged Out';
+      showState('stateUnauth');
+      setStepState(2, ''); setStepState(3, ''); setStepState(4, '');
+    }
+  });
+}
+
+window.addEventListener('load', function() {
+  log('Site B page loaded', 'info');
+  setStepState(1, 'done');
+  setTimeout(checkSSOSession, 800);
+});
+</script>
+</body>
+</html>
